@@ -38,8 +38,12 @@
 	"license": "MIT",
 	"author": "Kazi Badrul (https://kazibadrul.com)",
 	"homepage": "https://kazibadrul.com",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/alamriku/emdash-cms-sheet-to-table.git"
+	},
 	"bugs": {
-		"url": "https://kazibadrul.com/contact/"
+		"url": "https://github.com/alamriku/emdash-cms-sheet-to-table/issues"
 	},
 	"peerDependencies": {
 		"astro": ">=6.0.0-beta.0",

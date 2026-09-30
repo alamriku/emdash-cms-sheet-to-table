@@ -161,7 +161,8 @@ Interested, or need a feature for your site? [Contact me](https://kazibadrul.com
 
 ## Support
 
-Found a bug or have a question? Reach out at [kazibadrul.com/contact](https://kazibadrul.com/contact/).
+- **Bugs and feature requests:** [open an issue on GitHub](https://github.com/alamriku/emdash-cms-sheet-to-table/issues)
+- **Questions, Pro, or custom work:** [kazibadrul.com/contact](https://kazibadrul.com/contact/)
 
 ## License
 
