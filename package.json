@@ -1,7 +1,7 @@
 {
 	"name": "emdash-plugin-sheet-table",
 	"version": "0.1.0",
-	"description": "Turn a published Google Sheet into a live, searchable, sortable table block for EmDash.",
+	"description": "Google Sheets to table plugin for EmDash CMS. Show live, searchable, sortable tables from Google Sheets, with tabs, private sheets and auto-sync.",
 	"type": "module",
 	"main": "./dist/index.mjs",
 	"exports": {
