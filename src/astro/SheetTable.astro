@@ -1,0 +1,686 @@
+---
+interface SheetTableNode {
+	_type: "sheet-table";
+	_key: string;
+	tableId?: string;
+}
+
+interface Props {
+	node: SheetTableNode;
+}
+
+interface RenderPayload {
+	id: string;
+	name: string;
+	showTitle: boolean;
+	description: string;
+	theme: "simple" | "simple-dark" | "auto";
+	responsiveStyle: "default" | "collapsible" | "scrollable";
+	rowsPerPage: number;
+	showInfoBlock: boolean;
+	allowSorting: boolean;
+	showSearch: boolean;
+	linksAsLinks: boolean;
+	linksOpenInNewTab: boolean;
+	imagesAsImages: boolean;
+	headers: string[];
+	rows: string[][];
+	totalRowCount: number;
+	syncedAt: string | null;
+	asyncLoading: boolean;
+	error?: string;
+}
+
+const { node } = Astro.props;
+const tableId = node.tableId?.trim() ?? "";
+const endpoint = tableId ? `/_emdash/api/plugins/sheet-table/render?id=${encodeURIComponent(tableId)}` : "";
+
+// Mirrors the client script's cell classification (src/astro/SheetTable.astro's inline <script>) so the
+// server-rendered first paint matches what the client-side renderTable() produces after hydration.
+const IMAGE_PATTERN = /\.(png|jpe?g|gif|webp|avif|svg)(\?.*)?$/i;
+const URL_PATTERN = /^https?:\/\/\S+$/i;
+const isImageCell = (value: string) => URL_PATTERN.test(value) && IMAGE_PATTERN.test(value);
+const isLinkCell = (value: string) => URL_PATTERN.test(value);
+const themeClassOf = (theme: RenderPayload["theme"]) =>
+	theme === "auto" ? "auto" : theme === "simple-dark" ? "dark" : "light";
+
+// A table's "Load asynchronously" setting decides how it renders. When it's on (the default), skip
+// straight to the client-fetched "Loading…" placeholder below — no server-side sheet fetch here, so a
+// slow or stale Google Sheet sync never blocks this page's response. When it's off, the owner has opted
+// into server rendering: fetch the snapshot now, at request time, and emit real <table> markup with no
+// client round trip, so the table works without JS and shows up in view-source for crawlers.
+//
+// The initial request is a cheap `metaOnly` lookup — a local read of the table's settings with no
+// Google Sheets call — so async tables never pay for a fetch they don't want. Only when that check comes
+// back with asyncLoading:false do we make the second, full request that actually syncs the sheet data
+// (itself cache-first via syncTable, so it's normally fast too).
+let ssrPayload: RenderPayload | null = null;
+if (tableId) {
+	try {
+		const metaResponse = await fetch(new URL(`${endpoint}&metaOnly=1`, Astro.url));
+		const metaBody = await metaResponse.json();
+		if (metaBody?.data?.asyncLoading === false) {
+			const fullResponse = await fetch(new URL(endpoint, Astro.url));
+			const fullBody = await fullResponse.json();
+			if (fullBody?.data && fullBody.data.error !== "NOT_FOUND") {
+				ssrPayload = fullBody.data as RenderPayload;
+			}
+		}
+	} catch {
+		// Any failure here (network, parse, timeout) just falls back to the client-loaded path below.
+	}
+}
+---
+
+{
+	tableId ? (
+		ssrPayload ? (
+			<div
+				class={`emdash-sheet-table emdash-sheet-table--${themeClassOf(ssrPayload.theme)} emdash-sheet-table--${ssrPayload.responsiveStyle}`}
+				data-sheet-table-id={tableId}
+				data-sheet-table-endpoint={endpoint}
+			>
+				{/* Read by hydrate() below so the client attaches search/sort/pagination without an extra
+				    network round trip. `<`  is escaped so a cell value can't break out of the script tag. */}
+				<script
+					type="application/json"
+					data-sheet-table-payload
+					set:html={JSON.stringify(ssrPayload).replace(/</g, "\\u003c")}
+				/>
+				{ssrPayload.error && ssrPayload.rows.length === 0 ? (
+					<p class="emdash-sheet-table__error">Could not load table: {ssrPayload.error}</p>
+				) : (
+					<Fragment>
+						{ssrPayload.showTitle && <h3 class="emdash-sheet-table__title">{ssrPayload.name}</h3>}
+						{ssrPayload.description && <p class="emdash-sheet-table__description">{ssrPayload.description}</p>}
+						{ssrPayload.totalRowCount > ssrPayload.rows.length && (
+							<p class="emdash-sheet-table__notice">
+								This sheet has {ssrPayload.totalRowCount.toLocaleString()} rows. Showing the first{" "}
+								{ssrPayload.rows.length.toLocaleString()} — the rest can't be displayed here.
+							</p>
+						)}
+						{ssrPayload.showSearch && (
+							<div class="emdash-sheet-table__toolbar">
+								<input type="search" class="emdash-sheet-table__search" placeholder="Search…" />
+							</div>
+						)}
+						<div class="emdash-sheet-table__scroll">
+							<table>
+								<thead>
+									<tr>
+										{ssrPayload.headers.map((header) => (
+											<th data-sortable={ssrPayload.allowSorting ? "true" : undefined}>{header}</th>
+										))}
+									</tr>
+								</thead>
+								<tbody>
+									{ssrPayload.rows.slice(0, Math.max(1, ssrPayload.rowsPerPage)).map((row) => (
+										<tr>
+											{ssrPayload.headers.map((header, index) => {
+												const value = row[index] ?? "";
+												return (
+													<td data-label={header}>
+														{ssrPayload.imagesAsImages && isImageCell(value) ? (
+															<img src={value} loading="lazy" alt="" />
+														) : ssrPayload.linksAsLinks && isLinkCell(value) ? (
+															<a
+																href={value}
+																target={ssrPayload.linksOpenInNewTab ? "_blank" : undefined}
+																rel={ssrPayload.linksOpenInNewTab ? "noopener noreferrer" : undefined}
+															>
+																{value}
+															</a>
+														) : (
+															value
+														)}
+													</td>
+												);
+											})}
+										</tr>
+									))}
+								</tbody>
+							</table>
+						</div>
+						{(ssrPayload.showInfoBlock || ssrPayload.rows.length > ssrPayload.rowsPerPage) && (
+							<div class="emdash-sheet-table__pagination">
+								{ssrPayload.showInfoBlock && (
+									<span>
+										Showing {ssrPayload.rows.length === 0 ? 0 : 1} to{" "}
+										{Math.min(ssrPayload.rowsPerPage, ssrPayload.rows.length)} of {ssrPayload.rows.length} entries
+									</span>
+								)}
+							</div>
+						)}
+					</Fragment>
+				)}
+			</div>
+		) : (
+			<div class="emdash-sheet-table" data-sheet-table-id={tableId} data-sheet-table-endpoint={endpoint}>
+				<p class="emdash-sheet-table__loading">Loading table…</p>
+			</div>
+		)
+	) : (
+		<p class="emdash-sheet-table emdash-sheet-table--unconfigured">
+			Sheet Table block: no table selected yet.
+		</p>
+	)
+}
+
+<style is:global>
+	/*
+	 * Global, not scoped: the table body, search box, and pagination controls
+	 * are all built by the client script via document.createElement() at
+	 * hydration time. Astro's automatic CSS scoping only stamps its
+	 * data-astro-cid-* attribute onto elements present in this component's
+	 * own template output, so scoped rules would silently match none of the
+	 * dynamically created markup. Class names are namespaced with the
+	 * emdash-sheet-table- prefix to avoid colliding with host site styles.
+	 */
+	.emdash-sheet-table {
+		--ft-border: #d8dee4;
+		--ft-bg: #ffffff;
+		--ft-fg: #1f2328;
+		--ft-muted: #6e7781;
+		--ft-head-bg: #f6f8fa;
+		--ft-accent: #2563eb;
+		--ft-ring: rgb(37 99 235 / 0.35);
+		margin: 1.5rem 0;
+		padding: 1rem;
+		border: 1px solid var(--ft-border);
+		border-radius: 0.5rem;
+		box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+		font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+		font-size: 0.9375rem;
+		background: var(--ft-bg);
+		color: var(--ft-fg);
+	}
+
+	.emdash-sheet-table--dark {
+		--ft-border: #3d444d;
+		--ft-bg: #10151c;
+		--ft-fg: #e6edf3;
+		--ft-muted: #8b949e;
+		--ft-head-bg: #1a2029;
+		--ft-accent: #60a5fa;
+		--ft-ring: rgb(96 165 250 / 0.4);
+	}
+
+	/* "auto" theme: follow the visitor's OS/browser preference instead of a fixed light or dark palette. */
+	@media (prefers-color-scheme: dark) {
+		.emdash-sheet-table--auto {
+			--ft-border: #3d444d;
+			--ft-bg: #10151c;
+			--ft-fg: #e6edf3;
+			--ft-muted: #8b949e;
+			--ft-head-bg: #1a2029;
+			--ft-accent: #60a5fa;
+			--ft-ring: rgb(96 165 250 / 0.4);
+		}
+	}
+
+	.emdash-sheet-table__title {
+		font-size: 1.25rem;
+		font-weight: 600;
+		margin: 0 0 0.25rem;
+	}
+
+	.emdash-sheet-table__description {
+		margin: 0 0 0.75rem;
+		color: var(--ft-muted);
+	}
+
+	.emdash-sheet-table__toolbar {
+		display: flex;
+		justify-content: flex-end;
+		margin-bottom: 0.5rem;
+	}
+
+	.emdash-sheet-table__search {
+		border: 1px solid var(--ft-border);
+		border-radius: 6px;
+		padding: 0.375rem 0.625rem;
+		background: var(--ft-bg);
+		color: var(--ft-fg);
+		min-width: 220px;
+		transition: border-color 0.15s ease, box-shadow 0.15s ease;
+	}
+
+	.emdash-sheet-table__search:focus-visible {
+		outline: none;
+		border-color: var(--ft-accent);
+		box-shadow: 0 0 0 3px var(--ft-ring);
+	}
+
+	.emdash-sheet-table__scroll {
+		overflow-x: auto;
+	}
+
+	.emdash-sheet-table--scrollable .emdash-sheet-table__scroll {
+		max-height: 28rem;
+		overflow-y: auto;
+	}
+
+	.emdash-sheet-table table {
+		width: 100%;
+		border-collapse: collapse;
+		background: var(--ft-bg);
+	}
+
+	.emdash-sheet-table th,
+	.emdash-sheet-table td {
+		border: 1px solid var(--ft-border);
+		padding: 0.5rem 0.75rem;
+		text-align: left;
+		vertical-align: top;
+	}
+
+	.emdash-sheet-table tbody tr {
+		transition: background-color 0.1s ease;
+	}
+
+	.emdash-sheet-table tbody tr:hover {
+		background: var(--ft-head-bg);
+	}
+
+	.emdash-sheet-table th {
+		background: var(--ft-head-bg);
+		font-weight: 600;
+		white-space: nowrap;
+	}
+
+	.emdash-sheet-table th[data-sortable="true"] {
+		cursor: pointer;
+		user-select: none;
+		transition: color 0.15s ease;
+	}
+
+	.emdash-sheet-table th[data-sortable="true"]:hover {
+		color: var(--ft-accent);
+	}
+
+	.emdash-sheet-table th[data-sortable="true"]::after {
+		content: "\21C5";
+		opacity: 0.4;
+		margin-inline-start: 0.35em;
+		font-size: 0.8em;
+	}
+
+	.emdash-sheet-table th[data-sort="asc"]::after {
+		content: "\2191";
+		opacity: 1;
+	}
+
+	.emdash-sheet-table th[data-sort="desc"]::after {
+		content: "\2193";
+		opacity: 1;
+	}
+
+	.emdash-sheet-table img {
+		max-width: 6rem;
+		max-height: 6rem;
+		display: block;
+	}
+
+	.emdash-sheet-table__info,
+	.emdash-sheet-table__pagination {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		margin-top: 0.5rem;
+		font-size: 0.85rem;
+		color: var(--ft-muted);
+		gap: 0.5rem;
+		flex-wrap: wrap;
+	}
+
+	.emdash-sheet-table__pagination button {
+		border: 1px solid var(--ft-border);
+		background: var(--ft-bg);
+		color: var(--ft-fg);
+		border-radius: 6px;
+		padding: 0.25rem 0.6rem;
+		cursor: pointer;
+		transition: background-color 0.15s ease, box-shadow 0.15s ease;
+	}
+
+	.emdash-sheet-table__pagination button:not(:disabled):hover {
+		background: var(--ft-head-bg);
+	}
+
+	.emdash-sheet-table__pagination button:focus-visible {
+		outline: none;
+		box-shadow: 0 0 0 3px var(--ft-ring);
+	}
+
+	.emdash-sheet-table__pagination button:disabled {
+		opacity: 0.4;
+		cursor: default;
+	}
+
+	.emdash-sheet-table--collapsible table,
+	.emdash-sheet-table--collapsible thead,
+	.emdash-sheet-table--collapsible tbody,
+	.emdash-sheet-table--collapsible tr,
+	.emdash-sheet-table--collapsible td {
+		display: block;
+		width: 100%;
+	}
+
+	@media (min-width: 641px) {
+		.emdash-sheet-table--collapsible table,
+		.emdash-sheet-table--collapsible thead,
+		.emdash-sheet-table--collapsible tbody,
+		.emdash-sheet-table--collapsible tr,
+		.emdash-sheet-table--collapsible td {
+			display: revert;
+			width: revert;
+		}
+	}
+
+	@media (max-width: 640px) {
+		.emdash-sheet-table--collapsible thead {
+			display: none;
+		}
+		.emdash-sheet-table--collapsible tr {
+			border: 1px solid var(--ft-border);
+			margin-bottom: 0.5rem;
+			border-radius: 6px;
+			overflow: hidden;
+		}
+		.emdash-sheet-table--collapsible td {
+			border: none;
+			border-bottom: 1px solid var(--ft-border);
+			display: flex;
+			justify-content: space-between;
+			gap: 0.75rem;
+			text-align: right;
+		}
+		.emdash-sheet-table--collapsible td::before {
+			content: attr(data-label);
+			font-weight: 600;
+			text-align: left;
+		}
+		.emdash-sheet-table--collapsible td:last-child {
+			border-bottom: none;
+		}
+	}
+
+	.emdash-sheet-table__error {
+		border: 1px solid #f2b8b5;
+		background: #fdecea;
+		color: #7a271a;
+		border-radius: 6px;
+		padding: 0.5rem 0.75rem;
+	}
+
+	.emdash-sheet-table__notice {
+		border: 1px solid #f2d675;
+		background: #fdf6e3;
+		color: #6b5300;
+		border-radius: 6px;
+		padding: 0.5rem 0.75rem;
+		margin: 0 0 0.75rem;
+		font-size: 0.85rem;
+	}
+</style>
+
+<script>
+	interface RenderPayload {
+		id: string;
+		name: string;
+		showTitle: boolean;
+		description: string;
+		theme: "simple" | "simple-dark" | "auto";
+		responsiveStyle: "default" | "collapsible" | "scrollable";
+		rowsPerPage: number;
+		showInfoBlock: boolean;
+		allowSorting: boolean;
+		showSearch: boolean;
+		linksAsLinks: boolean;
+		linksOpenInNewTab: boolean;
+		imagesAsImages: boolean;
+		headers: string[];
+		rows: string[][];
+		totalRowCount: number;
+		syncedAt: string | null;
+		asyncLoading: boolean;
+		error?: string;
+	}
+
+	const IMAGE_PATTERN = /\.(png|jpe?g|gif|webp|avif|svg)(\?.*)?$/i;
+	const URL_PATTERN = /^https?:\/\/\S+$/i;
+
+	function cellNode(value: string, linksAsLinks: boolean, linksNewTab: boolean, imagesAsImages: boolean): Node {
+		if (imagesAsImages && URL_PATTERN.test(value) && IMAGE_PATTERN.test(value)) {
+			const img = document.createElement("img");
+			img.src = value;
+			img.loading = "lazy";
+			img.alt = "";
+			return img;
+		}
+		if (linksAsLinks && URL_PATTERN.test(value)) {
+			const a = document.createElement("a");
+			a.href = value;
+			a.textContent = value;
+			if (linksNewTab) {
+				a.target = "_blank";
+				a.rel = "noopener noreferrer";
+			}
+			return a;
+		}
+		return document.createTextNode(value);
+	}
+
+	function renderTable(container: HTMLElement, payload: RenderPayload) {
+		container.innerHTML = "";
+		const themeClass = payload.theme === "auto" ? "auto" : payload.theme === "simple-dark" ? "dark" : "light";
+		container.classList.add(`emdash-sheet-table--${themeClass}`);
+		container.classList.add(`emdash-sheet-table--${payload.responsiveStyle}`);
+
+		if (payload.error && payload.rows.length === 0) {
+			const err = document.createElement("p");
+			err.className = "emdash-sheet-table__error";
+			err.textContent = `Could not load table: ${payload.error}`;
+			container.appendChild(err);
+			return;
+		}
+
+		if (payload.showTitle) {
+			const title = document.createElement("h3");
+			title.className = "emdash-sheet-table__title";
+			title.textContent = payload.name;
+			container.appendChild(title);
+		}
+		if (payload.description) {
+			const desc = document.createElement("p");
+			desc.className = "emdash-sheet-table__description";
+			desc.textContent = payload.description;
+			container.appendChild(desc);
+		}
+		if (payload.totalRowCount > payload.rows.length) {
+			const notice = document.createElement("p");
+			notice.className = "emdash-sheet-table__notice";
+			notice.textContent = `This sheet has ${payload.totalRowCount.toLocaleString()} rows. Showing the first ${payload.rows.length.toLocaleString()} — the rest can't be displayed here.`;
+			container.appendChild(notice);
+		}
+
+		let query = "";
+		let sortColumn = -1;
+		let sortDirection: "asc" | "desc" | null = null;
+		let page = 0;
+
+		if (payload.showSearch) {
+			const toolbar = document.createElement("div");
+			toolbar.className = "emdash-sheet-table__toolbar";
+			const input = document.createElement("input");
+			input.type = "search";
+			input.className = "emdash-sheet-table__search";
+			input.placeholder = "Search…";
+			input.addEventListener("input", () => {
+				query = input.value.trim().toLowerCase();
+				page = 0;
+				update();
+			});
+			toolbar.appendChild(input);
+			container.appendChild(toolbar);
+		}
+
+		const scroll = document.createElement("div");
+		scroll.className = "emdash-sheet-table__scroll";
+		const table = document.createElement("table");
+		const thead = document.createElement("thead");
+		const headRow = document.createElement("tr");
+		payload.headers.forEach((header, index) => {
+			const th = document.createElement("th");
+			th.textContent = header;
+			if (payload.allowSorting) {
+				th.dataset.sortable = "true";
+				th.addEventListener("click", () => {
+					if (sortColumn === index) {
+						sortDirection = sortDirection === "asc" ? "desc" : sortDirection === "desc" ? null : "asc";
+					} else {
+						sortColumn = index;
+						sortDirection = "asc";
+					}
+					update();
+				});
+			}
+			headRow.appendChild(th);
+		});
+		thead.appendChild(headRow);
+		table.appendChild(thead);
+		const tbody = document.createElement("tbody");
+		table.appendChild(tbody);
+		scroll.appendChild(table);
+		container.appendChild(scroll);
+
+		const footer = document.createElement("div");
+		container.appendChild(footer);
+
+		function update() {
+			let rows = payload.rows;
+			if (query) {
+				rows = rows.filter((row) => row.some((cell) => cell.toLowerCase().includes(query)));
+			}
+			if (sortColumn >= 0 && sortDirection) {
+				const dir = sortDirection === "asc" ? 1 : -1;
+				rows = [...rows].sort((a, b) => {
+					const av = a[sortColumn] ?? "";
+					const bv = b[sortColumn] ?? "";
+					const an = Number(av);
+					const bn = Number(bv);
+					if (av !== "" && bv !== "" && !Number.isNaN(an) && !Number.isNaN(bn)) {
+						return (an - bn) * dir;
+					}
+					return av.localeCompare(bv) * dir;
+				});
+			}
+
+			Array.from(headRow.children).forEach((th, index) => {
+				const el = th as HTMLElement;
+				if (index === sortColumn && sortDirection) {
+					el.dataset.sort = sortDirection;
+				} else {
+					delete el.dataset.sort;
+				}
+			});
+
+			const total = rows.length;
+			const perPage = Math.max(1, payload.rowsPerPage);
+			const pageCount = Math.max(1, Math.ceil(total / perPage));
+			page = Math.min(page, pageCount - 1);
+			const start = page * perPage;
+			const pageRows = rows.slice(start, start + perPage);
+
+			tbody.innerHTML = "";
+			for (const row of pageRows) {
+				const tr = document.createElement("tr");
+				payload.headers.forEach((header, index) => {
+					const td = document.createElement("td");
+					td.dataset.label = header;
+					td.appendChild(
+						cellNode(row[index] ?? "", payload.linksAsLinks, payload.linksOpenInNewTab, payload.imagesAsImages),
+					);
+					tr.appendChild(td);
+				});
+				tbody.appendChild(tr);
+			}
+
+			footer.innerHTML = "";
+			if (payload.showInfoBlock || pageCount > 1) {
+				const row = document.createElement("div");
+				row.className = "emdash-sheet-table__pagination";
+
+				if (payload.showInfoBlock) {
+					const info = document.createElement("span");
+					const shownFrom = total === 0 ? 0 : start + 1;
+					const shownTo = Math.min(start + perPage, total);
+					info.textContent = `Showing ${shownFrom} to ${shownTo} of ${total} entries`;
+					row.appendChild(info);
+				}
+
+				if (pageCount > 1) {
+					const nav = document.createElement("span");
+					const prev = document.createElement("button");
+					prev.type = "button";
+					prev.textContent = "Previous";
+					prev.disabled = page === 0;
+					prev.addEventListener("click", () => {
+						page = Math.max(0, page - 1);
+						update();
+					});
+					const next = document.createElement("button");
+					next.type = "button";
+					next.textContent = "Next";
+					next.disabled = page >= pageCount - 1;
+					next.addEventListener("click", () => {
+						page = Math.min(pageCount - 1, page + 1);
+						update();
+					});
+					const label = document.createElement("span");
+					label.textContent = ` Page ${page + 1} of ${pageCount} `;
+					nav.appendChild(prev);
+					nav.appendChild(label);
+					nav.appendChild(next);
+					row.appendChild(nav);
+				}
+
+				footer.appendChild(row);
+			}
+		}
+
+		update();
+	}
+
+	async function hydrate(container: HTMLElement) {
+		// Server-rendered tables (asyncLoading: false) embed their payload inline, so the client can
+		// attach interactivity (search/sort/pagination) without re-fetching anything over the network.
+		const dataScript = container.querySelector<HTMLScriptElement>("script[data-sheet-table-payload]");
+		if (dataScript) {
+			try {
+				const payload = JSON.parse(dataScript.textContent ?? "") as RenderPayload;
+				renderTable(container, payload);
+				return;
+			} catch {
+				// Malformed embedded payload: fall through to the network fetch below.
+			}
+		}
+
+		const endpoint = container.dataset.sheetTableEndpoint;
+		if (!endpoint) return;
+		try {
+			const response = await fetch(endpoint, { headers: { Accept: "application/json" } });
+			const body = await response.json();
+			const payload: RenderPayload | undefined = body?.data;
+			if (!payload || body?.data?.error === "NOT_FOUND") {
+				container.innerHTML = '<p class="emdash-sheet-table__error">This table could not be found.</p>';
+				return;
+			}
+			renderTable(container, payload);
+		} catch {
+			container.innerHTML = '<p class="emdash-sheet-table__error">This table could not be loaded.</p>';
+		}
+	}
+
+	document.querySelectorAll<HTMLElement>(".emdash-sheet-table[data-sheet-table-endpoint]").forEach(hydrate);
+</script>

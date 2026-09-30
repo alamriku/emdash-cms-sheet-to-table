@@ -1,0 +1,221 @@
+---
+import SheetTable from "./SheetTable.astro";
+
+interface SheetTableTabsNode {
+	_type: "sheet-table-tabs";
+	_key: string;
+	tabGroupId?: string;
+}
+
+interface Props {
+	node: SheetTableTabsNode;
+}
+
+interface TabGroupPayload {
+	id: string;
+	name: string;
+	showName: boolean;
+	tabPosition: "before" | "after";
+	tabs: { name: string; tableId: string }[];
+}
+
+const { node } = Astro.props;
+const groupId = node.tabGroupId?.trim() ?? "";
+
+// Only the group's layout (title, tab names, table IDs) is fetched here. Each tab's table is drawn by
+// the regular SheetTable component, so every table keeps its own settings (theme, search, sorting,
+// async loading) exactly as it would outside a tab group.
+let group: TabGroupPayload | null = null;
+let problem = "";
+if (groupId) {
+	try {
+		const response = await fetch(
+			new URL(`/_emdash/api/plugins/sheet-table/tab-groups/render?id=${encodeURIComponent(groupId)}`, Astro.url),
+		);
+		const body = await response.json();
+		if (body?.data?.error === "NOT_FOUND") problem = "This tab group could not be found.";
+		else if (Array.isArray(body?.data?.tabs)) group = body.data as TabGroupPayload;
+		else problem = "This tab group could not be loaded.";
+	} catch {
+		problem = "This tab group could not be loaded.";
+	}
+}
+
+// Unique per block, so two tab groups on one page don't share element IDs.
+const uid = `emdash-sheet-tabs-${(node._key || groupId).replace(/[^a-zA-Z0-9_-]/g, "")}`;
+---
+
+{
+	!groupId ? (
+		<p class="emdash-sheet-tabs emdash-sheet-tabs--unconfigured">Sheet Table Tabs block: no tab group selected yet.</p>
+	) : !group ? (
+		<p class="emdash-sheet-tabs emdash-sheet-table__error">{problem}</p>
+	) : group.tabs.length === 0 ? (
+		<p class="emdash-sheet-tabs emdash-sheet-table__error">This tab group has no tables to show.</p>
+	) : (
+		<div class={`emdash-sheet-tabs emdash-sheet-tabs--${group.tabPosition}`} data-emdash-sheet-tabs>
+			{group.showName && <h2 class="emdash-sheet-tabs__title">{group.name}</h2>}
+			<div class="emdash-sheet-tabs__body">
+				<div class="emdash-sheet-tabs__list" role="tablist" aria-label={group.name}>
+					{group.tabs.map((tab, index) => (
+						<button
+							type="button"
+							role="tab"
+							class="emdash-sheet-tabs__tab"
+							id={`${uid}-tab-${index}`}
+							aria-controls={`${uid}-panel-${index}`}
+							aria-selected={index === 0 ? "true" : "false"}
+							tabindex={index === 0 ? 0 : -1}
+						>
+							{tab.name}
+						</button>
+					))}
+				</div>
+				{group.tabs.map((tab, index) => (
+					<div
+						class="emdash-sheet-tabs__panel"
+						role="tabpanel"
+						id={`${uid}-panel-${index}`}
+						aria-labelledby={`${uid}-tab-${index}`}
+						hidden={index !== 0}
+					>
+						<SheetTable node={{ _type: "sheet-table", _key: `${node._key}-${index}`, tableId: tab.tableId }} />
+					</div>
+				))}
+			</div>
+		</div>
+	)
+}
+
+<style is:global>
+	.emdash-sheet-tabs {
+		--ft-tabs-line: color-mix(in srgb, currentColor 18%, transparent);
+		--ft-tabs-hover: color-mix(in srgb, currentColor 7%, transparent);
+		--ft-tabs-accent: #2563eb;
+		margin: 1.5rem 0;
+	}
+
+	@media (prefers-color-scheme: dark) {
+		.emdash-sheet-tabs {
+			--ft-tabs-accent: #60a5fa;
+		}
+	}
+
+	.emdash-sheet-tabs__title {
+		font-size: 1.375rem;
+		font-weight: 600;
+		margin: 0 0 0.75rem;
+	}
+
+	/* Tabs below the table: flip the visual order but keep the tab list first in the DOM, so keyboard
+	   and screen-reader users still meet the tabs before the panel they control. */
+	.emdash-sheet-tabs__body {
+		display: flex;
+		flex-direction: column;
+	}
+
+	.emdash-sheet-tabs--after .emdash-sheet-tabs__body {
+		flex-direction: column-reverse;
+	}
+
+	.emdash-sheet-tabs__list {
+		display: flex;
+		gap: 0.25rem;
+		overflow-x: auto;
+		/* The tabs overlap the list's border by 1px (margin -1px); without this that 1px shows a vertical scrollbar. */
+		overflow-y: hidden;
+		scrollbar-width: thin;
+		border-bottom: 1px solid var(--ft-tabs-line);
+	}
+
+	.emdash-sheet-tabs--after .emdash-sheet-tabs__list {
+		border-bottom: none;
+		border-top: 1px solid var(--ft-tabs-line);
+	}
+
+	.emdash-sheet-tabs__tab {
+		flex: none;
+		font: inherit;
+		font-size: 0.9375rem;
+		color: inherit;
+		background: none;
+		border: none;
+		border-bottom: 2px solid transparent;
+		margin-bottom: -1px;
+		padding: 0.5rem 0.9rem;
+		cursor: pointer;
+		white-space: nowrap;
+		opacity: 0.75;
+		border-radius: 6px 6px 0 0;
+		transition: opacity 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+	}
+
+	.emdash-sheet-tabs--after .emdash-sheet-tabs__tab {
+		border-bottom: none;
+		border-top: 2px solid transparent;
+		margin-bottom: 0;
+		margin-top: -1px;
+		border-radius: 0 0 6px 6px;
+	}
+
+	.emdash-sheet-tabs__tab:hover {
+		opacity: 1;
+		background: var(--ft-tabs-hover);
+	}
+
+	.emdash-sheet-tabs__tab:focus-visible {
+		outline: 2px solid var(--ft-tabs-accent);
+		outline-offset: -2px;
+	}
+
+	.emdash-sheet-tabs__tab[aria-selected="true"] {
+		opacity: 1;
+		font-weight: 600;
+		border-color: var(--ft-tabs-accent);
+	}
+
+	/* The table's own outer margin would leave a gap between it and the tab bar. */
+	.emdash-sheet-tabs__panel > .emdash-sheet-table {
+		margin: 0.75rem 0 0;
+	}
+
+	.emdash-sheet-tabs--after .emdash-sheet-tabs__panel > .emdash-sheet-table {
+		margin: 0 0 0.75rem;
+	}
+</style>
+
+<script>
+	// Standard ARIA tabs: click or arrow keys switch tabs; Home/End jump to the first/last tab.
+	function setUpTabs(root: HTMLElement) {
+		const tabs = Array.from(root.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
+
+		function select(index: number, focus: boolean) {
+			tabs.forEach((tab, i) => {
+				const selected = i === index;
+				tab.setAttribute("aria-selected", selected ? "true" : "false");
+				tab.tabIndex = selected ? 0 : -1;
+				const panel = document.getElementById(tab.getAttribute("aria-controls") ?? "");
+				if (panel) panel.hidden = !selected;
+			});
+			if (focus) tabs[index]?.focus();
+		}
+
+		tabs.forEach((tab, index) => {
+			tab.addEventListener("click", () => select(index, false));
+			tab.addEventListener("keydown", (event) => {
+				const last = tabs.length - 1;
+				const target =
+					event.key === "ArrowRight" ? (index === last ? 0 : index + 1)
+					: event.key === "ArrowLeft" ? (index === 0 ? last : index - 1)
+					: event.key === "Home" ? 0
+					: event.key === "End" ? last
+					: -1;
+				if (target < 0) return;
+				event.preventDefault();
+				select(target, true);
+			});
+		});
+	}
+
+	document.querySelectorAll<HTMLElement>("[data-emdash-sheet-tabs]").forEach(setUpTabs);
+</script>
