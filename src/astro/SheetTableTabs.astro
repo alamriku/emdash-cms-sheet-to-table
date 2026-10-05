@@ -16,6 +16,8 @@ interface TabGroupPayload {
 	name: string;
 	showName: boolean;
 	tabPosition: "before" | "after";
+	tableWidth?: "content" | "wide" | "full";
+	maxWidth?: number;
 	tabs: { name: string; tableId: string }[];
 }
 
@@ -53,7 +55,11 @@ const uid = `emdash-sheet-tabs-${(node._key || groupId).replace(/[^a-zA-Z0-9_-]/
 	) : group.tabs.length === 0 ? (
 		<p class="emdash-sheet-tabs emdash-sheet-table__error">This tab group has no tables to show.</p>
 	) : (
-		<div class={`emdash-sheet-tabs emdash-sheet-tabs--${group.tabPosition}`} data-emdash-sheet-tabs>
+		<div
+			class={`emdash-sheet-tabs emdash-sheet-tabs--${group.tabPosition} emdash-sheet-width--${group.tableWidth ?? "content"}`}
+			style={group.tableWidth === "wide" && group.maxWidth ? `--ft-max-width: ${group.maxWidth}px` : undefined}
+			data-emdash-sheet-tabs
+		>
 			{group.showName && <h2 class="emdash-sheet-tabs__title">{group.name}</h2>}
 			<div class="emdash-sheet-tabs__body">
 				<div class="emdash-sheet-tabs__list" role="tablist" aria-label={group.name}>
@@ -92,7 +98,9 @@ const uid = `emdash-sheet-tabs-${(node._key || groupId).replace(/[^a-zA-Z0-9_-]/
 		--ft-tabs-line: color-mix(in srgb, currentColor 18%, transparent);
 		--ft-tabs-hover: color-mix(in srgb, currentColor 7%, transparent);
 		--ft-tabs-accent: #2563eb;
-		margin: 1.5rem 0;
+		/* margin-block, not margin: the inline margins belong to the width break-out in SheetTable.astro,
+		   and which of the two stylesheets loads last isn't guaranteed. */
+		margin-block: 1.5rem;
 	}
 
 	@media (prefers-color-scheme: dark) {

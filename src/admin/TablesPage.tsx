@@ -1,7 +1,7 @@
 import * as React from "react";
 
 import { parseSheetUrl, sheetUrlForTab } from "../lib/sheets.js";
-import { Checkbox, Field, PRO_CONTACT_URL, SectionNav, callRoute, inputClass, writeViewToUrl } from "./shared.js";
+import { Checkbox, Field, PRO_CONTACT_URL, SectionNav, type TableWidth, WidthFields, callRoute, inputClass, writeViewToUrl } from "./shared.js";
 
 /** The spreadsheet ID and tab gid in a pasted link, or null while it isn't a valid link yet. */
 function readSheetUrl(url: string): { sheetId: string; gid: string } | null {
@@ -45,6 +45,8 @@ interface TableFormState {
 	description: string;
 	theme: "simple" | "simple-dark" | "auto";
 	responsiveStyle: "default" | "collapsible" | "scrollable";
+	tableWidth: TableWidth;
+	maxWidth: number;
 	rowsPerPage: number;
 	showInfoBlock: boolean;
 	allowSorting: boolean;
@@ -88,6 +90,8 @@ const EMPTY_FORM: TableFormState = {
 	description: "",
 	theme: "auto",
 	responsiveStyle: "default",
+	tableWidth: "content",
+	maxWidth: 1200,
 	rowsPerPage: 10,
 	showInfoBlock: true,
 	allowSorting: true,
@@ -281,7 +285,8 @@ export function TablesPage() {
 				`tables/get?id=${encodeURIComponent(id)}`,
 			);
 			if (!data.table) throw new Error("Table not found");
-			setForm(data.table);
+			// Spread over the defaults: tables saved by an older version lack newer fields (e.g. tableWidth).
+			setForm({ ...EMPTY_FORM, ...data.table });
 			setSyncWarning(data.snapshot?.error ?? null);
 			setEditingId(id);
 			setView("form");
@@ -591,6 +596,12 @@ export function TablesPage() {
 							</select>
 						</Field>
 					</div>
+
+					<WidthFields
+						tableWidth={form.tableWidth}
+						maxWidth={form.maxWidth}
+						onChange={(changes) => setForm((f) => ({ ...f, ...changes }))}
+					/>
 
 					<Checkbox label="Show table title" checked={form.showTitle} onChange={(v) => setForm((f) => ({ ...f, showTitle: v }))} />
 

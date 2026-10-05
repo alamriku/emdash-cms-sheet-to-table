@@ -5,6 +5,7 @@ sheet, and your site's table follows. No copy-pasting data, no HTML tables to ma
 
 [npm](https://www.npmjs.com/package/emdash-plugin-sheet-table) |
 [GitHub](https://github.com/alamriku/emdash-cms-sheet-to-table) |
+[Website & demo](https://kazibadrul.com/sheet-table/) |
 [Report a bug](https://github.com/alamriku/emdash-cms-sheet-to-table/issues) |
 [Pro & support](https://kazibadrul.com/contact/)
 
@@ -50,6 +51,9 @@ source of truth that anyone on your team can edit, right from the spreadsheet th
   (numbers sort as numbers), and page through long tables.
 - **Responsive layouts.** Choose *Default*, *Collapsible* (rows stack into cards on phones), or
   *Scrollable* (fixed-height table that scrolls).
+- **Table width.** Keep a table inside your post's text column, make it *Wide* (grows past the
+  column up to a max width you set), or *Full width* (spans the screen with a small edge gap). Wide
+  tables stay centered and on screen, even next to a sidebar. Tab groups have the same setting.
 - **Light, dark, or automatic theme.** *Auto* follows each visitor's light/dark preference.
 - **Links and images.** URLs in cells become clickable links (optionally opening in a new
   tab), and image URLs show as images.
@@ -79,7 +83,7 @@ A Pro version is planned for sites that need more. Features being considered:
 - **Premium themes**, a theme customizer, and custom CSS per table
 - **Priority support**
 
-Interested, or need a feature for your site? [Get in touch](https://kazibadrul.com/contact/).
+Interested, or need a feature for your site? See the [Pro roadmap](https://kazibadrul.com/sheet-table/#pro) or [get in touch](https://kazibadrul.com/contact/).
 
 ## Installation
 
@@ -244,6 +248,10 @@ The plugin sends no telemetry and no analytics. Google's
   page, the dropdown may stop appearing, but pasting a link that includes `#gid=…` still works.
 
 ## Changelog
+
+**Unreleased**
+- New **Table width** setting for tables and tab groups: *Content width*, *Wide* (with a max width
+  in pixels), or *Full width*. Existing tables keep their current width.
 
 **0.1.1**
 - Improved documentation.

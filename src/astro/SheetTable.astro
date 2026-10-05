@@ -16,6 +16,8 @@ interface RenderPayload {
 	description: string;
 	theme: "simple" | "simple-dark" | "auto";
 	responsiveStyle: "default" | "collapsible" | "scrollable";
+	tableWidth?: "content" | "wide" | "full";
+	maxWidth?: number;
 	rowsPerPage: number;
 	showInfoBlock: boolean;
 	allowSorting: boolean;
@@ -43,6 +45,9 @@ const isImageCell = (value: string) => URL_PATTERN.test(value) && IMAGE_PATTERN.
 const isLinkCell = (value: string) => URL_PATTERN.test(value);
 const themeClassOf = (theme: RenderPayload["theme"]) =>
 	theme === "auto" ? "auto" : theme === "simple-dark" ? "dark" : "light";
+// "wide" carries its pixel cap as a CSS variable; "full" and "content" need none. Mirrored in renderTable().
+const widthStyleOf = (payload: RenderPayload) =>
+	payload.tableWidth === "wide" && payload.maxWidth ? `--ft-max-width: ${payload.maxWidth}px` : undefined;
 
 // A table's "Load asynchronously" setting decides how it renders. When it's on (the default), skip
 // straight to the client-fetched "Loading…" placeholder below — no server-side sheet fetch here, so a
@@ -76,7 +81,8 @@ if (tableId) {
 	tableId ? (
 		ssrPayload ? (
 			<div
-				class={`emdash-sheet-table emdash-sheet-table--${themeClassOf(ssrPayload.theme)} emdash-sheet-table--${ssrPayload.responsiveStyle}`}
+				class={`emdash-sheet-table emdash-sheet-table--${themeClassOf(ssrPayload.theme)} emdash-sheet-table--${ssrPayload.responsiveStyle} emdash-sheet-width--${ssrPayload.tableWidth ?? "content"}`}
+				style={widthStyleOf(ssrPayload)}
 				data-sheet-table-id={tableId}
 				data-sheet-table-endpoint={endpoint}
 			>
@@ -193,6 +199,38 @@ if (tableId) {
 		font-size: 0.9375rem;
 		background: var(--ft-bg);
 		color: var(--ft-fg);
+	}
+
+	/*
+	 * Width break-out, shared with tab groups (SheetTableTabs.astro). Post bodies usually sit in a narrow
+	 * text column; "wide" and "full" let the box grow past it. The box is centered on that column with
+	 * equal negative margins, never shrinks below it (the max(100%, …)), and stops 1rem short of each
+	 * screen edge. `100%` resolves against the column in both `width` and `margin-inline`, which is what
+	 * keeps the two in agreement.
+	 */
+	.emdash-sheet-width--wide,
+	.emdash-sheet-width--full {
+		/* --ft-viewport is set by fitBreakouts(): 100vw counts the scrollbar, the real visible width doesn't. */
+		--ft-width: max(100%, min(var(--ft-max-width, 1200px), var(--ft-viewport, 100vw) - 2rem));
+		box-sizing: border-box;
+		width: var(--ft-width);
+		max-width: none;
+		margin-inline: calc((100% - var(--ft-width)) / 2);
+		/* Set by fitBreakouts() when an off-center column (a sidebar layout) would push the box off screen. */
+		translate: var(--ft-shift, 0px) 0;
+		/* Above neighbouring content it may now overlap, such as a sidebar. */
+		position: relative;
+		z-index: 1;
+	}
+
+	.emdash-sheet-width--full {
+		--ft-max-width: var(--ft-viewport, 100vw);
+	}
+
+	/* Inside a tab group, the group decides the width; each table just fills its panel. */
+	.emdash-sheet-tabs .emdash-sheet-table {
+		width: auto;
+		margin-inline: 0;
 	}
 
 	.emdash-sheet-table--dark {
@@ -432,6 +470,8 @@ if (tableId) {
 		description: string;
 		theme: "simple" | "simple-dark" | "auto";
 		responsiveStyle: "default" | "collapsible" | "scrollable";
+		tableWidth?: "content" | "wide" | "full";
+		maxWidth?: number;
 		rowsPerPage: number;
 		showInfoBlock: boolean;
 		allowSorting: boolean;
@@ -476,6 +516,10 @@ if (tableId) {
 		const themeClass = payload.theme === "auto" ? "auto" : payload.theme === "simple-dark" ? "dark" : "light";
 		container.classList.add(`emdash-sheet-table--${themeClass}`);
 		container.classList.add(`emdash-sheet-table--${payload.responsiveStyle}`);
+		container.classList.add(`emdash-sheet-width--${payload.tableWidth ?? "content"}`);
+		if (payload.tableWidth === "wide" && payload.maxWidth) {
+			container.style.setProperty("--ft-max-width", `${payload.maxWidth}px`);
+		}
 
 		if (payload.error && payload.rows.length === 0) {
 			const err = document.createElement("p");
@@ -682,5 +726,36 @@ if (tableId) {
 		}
 	}
 
-	document.querySelectorAll<HTMLElement>(".emdash-sheet-table[data-sheet-table-endpoint]").forEach(hydrate);
+	/**
+	 * CSS centers a "wide"/"full" box on the content column, which only matches the page's center when
+	 * the column itself is centered. With a sidebar on one side it isn't, and the box can run off the
+	 * screen. This nudges each box back inside the viewport, keeping a 16px gap. Tables inside a tab
+	 * group are skipped: they fill the group, and the group is nudged instead.
+	 */
+	const SCREEN_GAP = 16;
+	function fitBreakouts() {
+		const viewport = document.documentElement.clientWidth;
+		document.documentElement.style.setProperty("--ft-viewport", `${viewport}px`);
+		document.querySelectorAll<HTMLElement>(".emdash-sheet-width--wide, .emdash-sheet-width--full").forEach((el) => {
+			if (!el.classList.contains("emdash-sheet-tabs") && el.closest(".emdash-sheet-tabs")) return;
+			el.style.removeProperty("--ft-shift");
+			const rect = el.getBoundingClientRect();
+			let shift = 0;
+			if (rect.left < SCREEN_GAP) shift = SCREEN_GAP - rect.left;
+			else if (rect.right > viewport - SCREEN_GAP) shift = viewport - SCREEN_GAP - rect.right;
+			if (shift) el.style.setProperty("--ft-shift", `${Math.round(shift)}px`);
+		});
+	}
+
+	let fitFrame = 0;
+	window.addEventListener("resize", () => {
+		cancelAnimationFrame(fitFrame);
+		fitFrame = requestAnimationFrame(fitBreakouts);
+	});
+
+	// Async tables only get their width class once their data arrives, so fit again after each one.
+	document
+		.querySelectorAll<HTMLElement>(".emdash-sheet-table[data-sheet-table-endpoint]")
+		.forEach((container) => void hydrate(container).then(fitBreakouts));
+	fitBreakouts();
 </script>

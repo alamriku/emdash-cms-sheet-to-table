@@ -1,6 +1,6 @@
 import * as React from "react";
 
-import { Checkbox, Field, SectionNav, callRoute, inputClass, writeViewToUrl } from "./shared.js";
+import { Checkbox, Field, SectionNav, type TableWidth, WidthFields, callRoute, inputClass, writeViewToUrl } from "./shared.js";
 
 const TABLES_PAGE = "/_emdash/admin/plugins/sheet-table/tables";
 
@@ -26,6 +26,8 @@ interface TabGroupForm {
 	name: string;
 	showName: boolean;
 	tabPosition: "before" | "after";
+	tableWidth: TableWidth;
+	maxWidth: number;
 	tabs: TabRow[];
 }
 
@@ -33,6 +35,9 @@ interface StoredTabGroup {
 	name: string;
 	showName: boolean;
 	tabPosition: "before" | "after";
+	/** Missing on groups saved before the width setting existed. */
+	tableWidth?: TableWidth;
+	maxWidth?: number;
 	tabs: { name: string; tableId: string }[];
 }
 
@@ -43,6 +48,8 @@ const emptyForm = (): TabGroupForm => ({
 	name: "",
 	showName: true,
 	tabPosition: "before",
+	tableWidth: "content",
+	maxWidth: 1200,
 	tabs: [newRow(), newRow()],
 });
 
@@ -110,8 +117,8 @@ export function TabGroupsPage() {
 		try {
 			const data = await callRoute<{ group?: StoredTabGroup }>(`tab-groups/get?id=${encodeURIComponent(id)}`);
 			if (!data.group) throw new Error("Tab group not found");
-			const { name, showName, tabPosition, tabs } = data.group;
-			setForm({ name, showName, tabPosition, tabs: tabs.map((tab) => newRow(tab.name, tab.tableId)) });
+			const { name, showName, tabPosition, tableWidth = "content", maxWidth = 1200, tabs } = data.group;
+			setForm({ name, showName, tabPosition, tableWidth, maxWidth, tabs: tabs.map((tab) => newRow(tab.name, tab.tableId)) });
 			setEditingId(id);
 			setView("form");
 		} catch (cause) {
@@ -169,6 +176,8 @@ export function TabGroupsPage() {
 			name: form.name,
 			showName: form.showName,
 			tabPosition: form.tabPosition,
+			tableWidth: form.tableWidth,
+			maxWidth: form.maxWidth,
 			tabs: form.tabs.map(({ name, tableId }) => ({ name, tableId })),
 		};
 		try {
@@ -265,6 +274,13 @@ export function TabGroupsPage() {
 							</label>
 						</div>
 					</fieldset>
+
+					<WidthFields
+						tableWidth={form.tableWidth}
+						maxWidth={form.maxWidth}
+						onChange={(changes) => setForm((f) => ({ ...f, ...changes }))}
+					/>
+					<p className="-mt-2 text-xs text-muted-foreground">Tables inside a tab group fill the group, so their own width setting is ignored here.</p>
 
 					<fieldset className="rounded-lg border p-4 space-y-3">
 						<legend className="text-sm font-medium px-1">Tabs</legend>

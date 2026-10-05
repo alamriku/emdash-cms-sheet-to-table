@@ -1,3 +1,13 @@
+/**
+ * How wide a table (or tab group) may grow. "content" stays inside the page's content column; "wide"
+ * breaks out of it up to `maxWidth` pixels; "full" spans the viewport. Both break-outs stay centered on
+ * the content column, never get narrower than it, and keep a 1rem gap from the screen edges.
+ */
+export type TableWidth = "content" | "wide" | "full";
+
+/** Default cap, in pixels, for the "wide" table width. */
+export const DEFAULT_MAX_WIDTH = 1200;
+
 /** A saved table configuration, stored in the `tables` storage collection. */
 export interface TableRecord {
 	name: string;
@@ -13,6 +23,10 @@ export interface TableRecord {
 	description: string;
 	theme: "simple" | "simple-dark" | "auto";
 	responsiveStyle: "default" | "collapsible" | "scrollable";
+	/** Missing on tables saved before this setting existed; read it as "content". */
+	tableWidth: TableWidth;
+	/** Pixel cap used when tableWidth is "wide". */
+	maxWidth: number;
 	rowsPerPage: number;
 	showInfoBlock: boolean;
 	allowSorting: boolean;
@@ -53,6 +67,8 @@ export const DEFAULT_TABLE: Omit<TableRecord, "createdAt" | "updatedAt"> = {
 	description: "",
 	theme: "auto",
 	responsiveStyle: "default",
+	tableWidth: "content",
+	maxWidth: DEFAULT_MAX_WIDTH,
 	rowsPerPage: 10,
 	showInfoBlock: true,
 	allowSorting: true,
@@ -74,6 +90,8 @@ export interface TableRenderPayload {
 	description: string;
 	theme: TableRecord["theme"];
 	responsiveStyle: TableRecord["responsiveStyle"];
+	tableWidth: TableWidth;
+	maxWidth: number;
 	rowsPerPage: number;
 	showInfoBlock: boolean;
 	allowSorting: boolean;
@@ -108,6 +126,9 @@ export interface TabGroupRecord {
 	showName: boolean;
 	/** Whether the tab buttons sit above ("before") or below ("after") the table. */
 	tabPosition: "before" | "after";
+	/** Width of the whole group. Tables inside a group fill it and ignore their own width setting. Missing on older groups; read it as "content". */
+	tableWidth: TableWidth;
+	maxWidth: number;
 	tabs: TabGroupTab[];
 	createdAt: string;
 	updatedAt: string;
@@ -119,5 +140,7 @@ export interface TabGroupRenderPayload {
 	name: string;
 	showName: boolean;
 	tabPosition: TabGroupRecord["tabPosition"];
+	tableWidth: TableWidth;
+	maxWidth: number;
 	tabs: TabGroupTab[];
 }

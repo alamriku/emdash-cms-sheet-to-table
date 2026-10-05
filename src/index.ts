@@ -17,6 +17,7 @@ import { parseSheetUrl } from "./lib/sheets.js";
 import { listSheetTabs, listSpreadsheets } from "./lib/sheets-api.js";
 import { fetchPublicSheetTabs, snapshotKey, syncTable } from "./lib/sync.js";
 import {
+	DEFAULT_MAX_WIDTH,
 	DEFAULT_TABLE,
 	type TabGroupRecord,
 	type TabGroupRenderPayload,
@@ -58,6 +59,12 @@ export function sheetTablePlugin(
 // page (see src/admin/index.tsx); it's reached from the "Tables | Tab Groups" switch at the top of each page.
 const ADMIN_PAGES = [{ path: "/tables", label: "Sheet Table", icon: "table" }];
 
+// Shared by tables and tab groups. Defaults keep older admin builds (which don't send these) valid.
+const widthFields = {
+	tableWidth: z.enum(["content", "wide", "full"]).default("content"),
+	maxWidth: z.number().int().min(480).max(3840).default(DEFAULT_MAX_WIDTH),
+};
+
 const commonTableFields = {
 	name: z.string().min(1).max(200),
 	hasHeaderRow: z.boolean(),
@@ -65,6 +72,7 @@ const commonTableFields = {
 	description: z.string().max(2000),
 	theme: z.enum(["simple", "simple-dark", "auto"]),
 	responsiveStyle: z.enum(["default", "collapsible", "scrollable"]),
+	...widthFields,
 	rowsPerPage: z.number().int().min(1).max(500),
 	showInfoBlock: z.boolean(),
 	allowSorting: z.boolean(),
@@ -108,6 +116,7 @@ const tabGroupFields = {
 	name: z.string().trim().min(1).max(200),
 	showName: z.boolean(),
 	tabPosition: z.enum(["before", "after"]),
+	...widthFields,
 	tabs: z
 		.array(z.object({ name: z.string().trim().min(1).max(100), tableId: z.string().min(1) }))
 		.min(1, "Add at least one tab")
@@ -389,6 +398,8 @@ export function createPlugin(_options: SheetTablePluginOptions = {}): ResolvedPl
 						description: input.description,
 						theme: input.theme,
 						responsiveStyle: input.responsiveStyle,
+						tableWidth: input.tableWidth,
+						maxWidth: input.maxWidth,
 						rowsPerPage: input.rowsPerPage,
 						showInfoBlock: input.showInfoBlock,
 						allowSorting: input.allowSorting,
@@ -551,6 +562,8 @@ export function createPlugin(_options: SheetTablePluginOptions = {}): ResolvedPl
 						description: table.description,
 						theme: table.theme,
 						responsiveStyle: table.responsiveStyle,
+						tableWidth: table.tableWidth ?? "content",
+						maxWidth: table.maxWidth ?? DEFAULT_MAX_WIDTH,
 						rowsPerPage: table.rowsPerPage,
 						showInfoBlock: table.showInfoBlock,
 						allowSorting: table.allowSorting,
@@ -684,6 +697,8 @@ export function createPlugin(_options: SheetTablePluginOptions = {}): ResolvedPl
 						name: group.name,
 						showName: group.showName,
 						tabPosition: group.tabPosition,
+						tableWidth: group.tableWidth ?? "content",
+						maxWidth: group.maxWidth ?? DEFAULT_MAX_WIDTH,
 						tabs,
 					};
 				},

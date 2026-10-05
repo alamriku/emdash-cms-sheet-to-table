@@ -141,3 +141,47 @@ export function Checkbox({ label, checked, onChange }: { label: string; checked:
 		</label>
 	);
 }
+
+export type TableWidth = "content" | "wide" | "full";
+
+const WIDTH_HELP: Record<TableWidth, string> = {
+	content: "Stays inside the page's text column.",
+	wide: "Grows past the text column, up to the max width, centered on it.",
+	full: "Spans the screen, keeping a small gap at each edge.",
+};
+
+/** The "Table width" control, shared by the table and tab group forms. */
+export function WidthFields({
+	tableWidth,
+	maxWidth,
+	onChange,
+}: {
+	tableWidth: TableWidth;
+	maxWidth: number;
+	onChange: (changes: { tableWidth?: TableWidth; maxWidth?: number }) => void;
+}) {
+	return (
+		<div className="grid grid-cols-2 gap-4">
+			<Field label="Table width" help={WIDTH_HELP[tableWidth]}>
+				<select className={inputClass} value={tableWidth} onChange={(e) => onChange({ tableWidth: e.target.value as TableWidth })}>
+					<option value="content">Content width</option>
+					<option value="wide">Wide</option>
+					<option value="full">Full width</option>
+				</select>
+			</Field>
+			{tableWidth === "wide" && (
+				<Field label="Max width (px)" help="Never narrower than the text column, never wider than the screen.">
+					<input
+						type="number"
+						min={480}
+						max={3840}
+						step={20}
+						className={inputClass}
+						value={maxWidth}
+						onChange={(e) => onChange({ maxWidth: Number(e.target.value) })}
+					/>
+				</Field>
+			)}
+		</div>
+	);
+}
