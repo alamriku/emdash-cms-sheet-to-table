@@ -1,6 +1,6 @@
 {
 	"name": "emdash-plugin-sheet-table",
-	"version": "0.1.1",
+	"version": "0.2.0",
 	"description": "Google Sheets to table plugin for EmDash CMS. Show live, searchable, sortable tables from Google Sheets, with tabs, private sheets and auto-sync.",
 	"type": "module",
 	"main": "./dist/index.mjs",
