@@ -14,7 +14,11 @@ npm install emdash-plugin-sheet-table
 ```
 
 > **Free and open source (MIT).** Up to 10 tables, unlimited tab groups, public and private
-> Google Sheets. Need more? See [Sheet Table Pro](#sheet-table-pro).
+> Google Sheets. Includes the [table builder](#table-builder): themes, exports, frozen columns and more.
+
+![A Google Sheet shown as a table with the Minimal elegant theme, export buttons, search and Tailwind-style pagination](docs/screenshots/theme-minimal-elegant.png)
+
+**[Read the user guide →](docs/README.md)**
 
 ## Why Sheet Table?
 
@@ -54,7 +58,21 @@ source of truth that anyone on your team can edit, right from the spreadsheet th
 - **Table width.** Keep a table inside your post's text column, make it *Wide* (grows past the
   column up to a max width you set), or *Full width* (spans the screen with a small edge gap). Wide
   tables stay centered and on screen, even next to a sidebar. Tab groups have the same setting.
-- **Light, dark, or automatic theme.** *Auto* follows each visitor's light/dark preference.
+- **9 table themes, plus Auto.** *Auto* follows each visitor's light/dark preference. Change any
+  theme's colors per table, or build your own reusable themes in the theme builder.
+- **Your sheet's own look.** Import cell colors, bold/italic/underline, font size, font family and
+  alignment from Google Sheets, and keep merged cells merged.
+- **Export buttons.** Let visitors download the table as CSV, Excel or PDF, get it as JSON, print
+  it, or copy it to the clipboard.
+- **Sticky header, frozen columns, drag to scroll.** Keep the header and the first or last columns
+  in view on big tables.
+- **Default sort order.** Choose the column a table is sorted by when the page loads, and optionally
+  hide the sort arrows.
+- **Five pagination styles.** Default, Modern, Minimal, Tailwind or Outlined, in the middle or at
+  the bottom right, in your color.
+- **Hide rows, columns and cells.** Hide columns only on phones or only on desktop, or hide rows and
+  single cells everywhere. Hidden data never reaches the browser.
+- **Custom CSS** for each table.
 - **Links and images.** URLs in cells become clickable links (optionally opening in a new
   tab), and image URLs show as images.
 - **Table title, description, and info block.** Show a heading, a short description, and
@@ -70,20 +88,34 @@ source of truth that anyone on your team can edit, right from the spreadsheet th
 - **Built for EmDash.** Uses EmDash's own storage, settings, cron, and editor blocks, and
   follows the admin's light/dark theme.
 
-## Sheet Table Pro
+## Table builder
 
-A Pro version is planned for sites that need more. Features being considered:
+Every table is set up in a five-step wizard. A **live preview** under each step uses the same code
+your visitors get, and has a phone view so you can check the mobile layout before you publish.
+The [table builder guide](docs/table-builder.md) walks through every option.
 
-- **Unlimited tables** (the free version allows 10)
-- **Merged cells** and cell styles (background and text colors, bold) imported from Google Sheets
-- **Export buttons:** CSV, Excel, and PDF
-- **Sticky header and frozen columns** while scrolling
-- **Hide columns or rows**, separately for desktop and mobile
-- **Default sort order** when the page loads
-- **Premium themes**, a theme customizer, and custom CSS per table
-- **Priority support**
+![The table setup wizard on its Table theme step, showing the step indicator and theme cards](docs/screenshots/wizard-theme.png)
 
-Interested, or need a feature for your site? See the [Pro roadmap](https://kazibadrul.com/sheet-table/#pro) or [get in touch](https://kazibadrul.com/contact/).
+1. **Data source.** Paste a public link or pick a sheet from your connected Google account, then
+   choose the tab.
+2. **Table theme.** Choose a theme, import your sheet's formatting, change colors, or create a theme.
+3. **Customization.** Display options, layout and scrolling, frozen columns, sorting, pagination and
+   export buttons.
+4. **Hide rows & columns.** Hide columns per device, and pick rows and cells to hide.
+5. **Advanced.** Custom CSS, async loading, cache duration and timeout.
+
+### Themes
+
+| | |
+| --- | --- |
+| ![Dark knight theme](docs/screenshots/theme-dark-knight.png) **Dark knight** | ![Uppercase elegant theme](docs/screenshots/theme-uppercase-elegant.png) **Uppercase elegant** |
+| ![Vertical style theme](docs/screenshots/theme-vertical.png) **Vertical style** | ![Minimal on dark theme](docs/screenshots/theme-minimal-dark.png) **Minimal on dark** |
+
+Also included: *Auto*, *Simple*, *Simple on dark*, *Minimal*, *Minimal elegant* (shown at the top)
+and *Uppercase heading*. See [Themes and styles](docs/themes.md) for the theme builder and importing sheet styles.
+
+**Optimized loading** is built in: the table's script and styles are only included on pages that
+show a table, and the export code only downloads when a visitor first clicks an export button.
 
 ## Installation
 
@@ -120,8 +152,10 @@ export default defineConfig({
 2. In the EmDash admin, open **Sheet Table** and click **New table**.
 3. Keep **Public sheet URL**, paste the sheet's link, and choose the tab from the
    **Sheet tab** dropdown.
-4. Set the display options you want and click **Create table**. The sheet syncs right away.
-5. Open a post or page, type `/` in the editor, insert **Sheet Table**, and pick your table.
+4. Click **Create table & continue**. The sheet syncs right away and the live preview appears.
+5. Optional: go through the next steps to pick a theme, turn on export buttons, hide columns and so
+   on, then click **Save changes**. You can come back to any step later.
+6. Open a post or page, type `/` in the editor, insert **Sheet Table**, and pick your table.
 
 That's it. The same table can be placed on as many pages as you like.
 
@@ -178,7 +212,7 @@ asks for **read-only** access to Sheets and Drive.
 4. In the EmDash admin, open **Sheet Table → Settings** and paste the **Client ID** and
    **Client Secret**.
 5. Back on **Sheet Table**, click **Connect Google account** and approve access.
-6. When creating a table, choose **Pick from connected Google account**, then pick the
+6. When creating a table, choose **Connected Google account**, then pick the
    spreadsheet and tab.
 
 The plugin stores only an encrypted refresh token and creates short-lived access tokens when it
@@ -220,6 +254,19 @@ Only until you put it on a page. Once a table is on your site, anyone can see ev
 column of that tab, including rows beyond the first page. Only use tabs whose data is fine to
 publish.
 
+**Can visitors download the table?**
+Yes, if you turn on export buttons (step 3 of the table builder). Exports contain every page of the
+rows the visitor has searched and sorted, without hidden columns.
+
+**Are hidden rows really hidden?**
+Yes. Hidden rows, hidden cells and columns hidden on both desktop and phone are removed on the server,
+so they aren't in the page source or the exports. Columns hidden on only one screen size are still
+sent and hidden with CSS, so don't rely on that for private data.
+
+**Why don't my sheet's colors show?**
+Turn on **Import colors and text styles from sheet** in the Table theme step and save. White
+backgrounds and black text are left out on purpose, so the theme still shows through.
+
 **Do I need to know how to code?**
 Only to install the plugin (one npm command and one line in your Astro config). Everything else
 happens in the EmDash admin.
@@ -230,9 +277,9 @@ Sheet Table only contacts Google, and only for the features you use:
 
 | Service | Used for | When |
 | --- | --- | --- |
-| `docs.google.com`, `*.googleusercontent.com` | Reading public sheets (CSV export) and listing their tabs | When a public table syncs, or when you pick a tab |
+| `docs.google.com`, `*.googleusercontent.com` | Reading public sheets (CSV export), their cell styles and merged cells, and listing their tabs | When a public table syncs, or when you pick a tab |
 | `oauth2.googleapis.com`, `www.googleapis.com` | Connecting a Google account and getting access tokens | Only if you connect Google |
-| `sheets.googleapis.com` | Reading private sheets | Only for tables using a connected account |
+| `sheets.googleapis.com` | Reading private sheets, and their cell styles if you import them | Only for tables using a connected account |
 
 The plugin sends no telemetry and no analytics. Google's
 [Privacy Policy](https://policies.google.com/privacy) and
@@ -243,6 +290,12 @@ The plugin sends no telemetry and no analytics. Google's
 - **Up to 10,000 rows per table.** Larger sheets are cut off, and the table says so.
 - **Search, sorting, and pagination run in the visitor's browser**, so every row of the table is
   sent to the page. That's fast for typical sheets but not meant for huge datasets.
+- **Merged cells show only in the sheet's order.** While a visitor searches or sorts, merged cells
+  are drawn as separate cells.
+- **PDF export uses a built-in font** that covers Western European characters. Other scripts
+  (for example Arabic, Bengali or Chinese) show as "?" in the PDF; CSV, Excel and JSON keep them.
+- **Hidden rows are matched by position.** Inserting or deleting rows in the sheet can shift which
+  rows are hidden, so check the Hide step after big changes.
 - **One Google account per site.** All private-sheet tables read through the same connection.
 - **Tab list for public sheets** is read from Google's public sheet view. If Google changes that
   page, the dropdown may stop appearing, but pasting a link that includes `#gid=…` still works.
@@ -250,6 +303,16 @@ The plugin sends no telemetry and no analytics. Google's
 ## Changelog
 
 **Unreleased**
+- New five-step table wizard with live desktop/phone preview.
+- Nine table themes, per-table color overrides and a theme builder for custom themes.
+- Import cell styles and merged cells from Google Sheets.
+- Export to CSV, Excel, PDF, JSON, Print and Copy.
+- Sticky header with vertical scroll, horizontal dragging, frozen left/right columns.
+- Default sort order; option to hide sorting controls.
+- Five pagination styles, position and active color.
+- Hide columns per device, hide rows and hide cells.
+- Custom CSS per table.
+- New [user guide](docs/README.md) with screenshots.
 - New **Table width** setting for tables and tab groups: *Content width*, *Wide* (with a max width
   in pixels), or *Full width*. Existing tables keep their current width.
 

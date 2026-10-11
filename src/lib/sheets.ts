@@ -85,9 +85,10 @@ export function csvExportUrl(sheetId: string, gid: string): string {
 
 /**
  * Minimal RFC 4180 CSV parser: handles quoted fields, embedded commas,
- * embedded newlines, and doubled-quote escaping ("" -> ").
+ * embedded newlines, and doubled-quote escaping ("" -> "). Fully blank rows are dropped unless
+ * `keepEmptyRows` is set (then row N of the result is row N of the sheet).
  */
-export function parseCsv(text: string): string[][] {
+export function parseCsv(text: string, options: { keepEmptyRows?: boolean } = {}): string[][] {
 	const rows: string[][] = [];
 	let row: string[] = [];
 	let field = "";
@@ -131,5 +132,9 @@ export function parseCsv(text: string): string[][] {
 		rows.push(row);
 	}
 
-	return rows.filter((r) => r.some((cell) => cell.trim() !== ""));
+	return options.keepEmptyRows ? rows : rows.filter((r) => !isBlankRow(r));
+}
+
+export function isBlankRow(row: string[]): boolean {
+	return !row.some((cell) => cell.trim() !== "");
 }

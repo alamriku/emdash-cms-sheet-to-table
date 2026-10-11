@@ -1,0 +1,582 @@
+/*
+ * Front-end table styles. Imported by SheetTable.astro (bundled only into pages that show a table)
+ * and, as raw text, by the admin's live preview. All classes are prefixed (emdash-sheet-, ft-) so
+ * they don't collide with the host site.
+ *
+ * Colors come from CSS variables. The defaults below are the "Simple" theme; every other theme sets
+ * them inline on the table (see resolveTheme in src/lib/themes.ts), and "Auto" switches them with the
+ * visitor's color scheme.
+ */
+
+.emdash-sheet-table {
+	--ft-bg: #ffffff;
+	--ft-fg: #1f2328;
+	--ft-head-bg: #f6f8fa;
+	--ft-head-fg: #1f2328;
+	--ft-stripe: #f6f8fa;
+	--ft-hover: #f6f8fa;
+	--ft-border: #d8dee4;
+	--ft-accent: #2563eb;
+	--ft-muted: color-mix(in srgb, var(--ft-fg) 62%, var(--ft-bg));
+	--ft-ring: color-mix(in srgb, var(--ft-accent) 35%, transparent);
+	--ft-page-active: var(--ft-accent);
+	box-sizing: border-box;
+	margin: 1.5rem 0;
+	padding: 1rem;
+	border: 1px solid var(--ft-border);
+	border-radius: 0.75rem;
+	box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.06);
+	font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+	font-size: 0.9375rem;
+	line-height: 1.5;
+	background: var(--ft-bg);
+	color: var(--ft-fg);
+}
+
+.emdash-sheet-table *,
+.emdash-sheet-table *::before,
+.emdash-sheet-table *::after {
+	box-sizing: border-box;
+}
+
+@media (prefers-color-scheme: dark) {
+	.emdash-sheet-table--auto {
+		--ft-bg: #10151c;
+		--ft-fg: #e6edf3;
+		--ft-head-bg: #1a2029;
+		--ft-head-fg: #e6edf3;
+		--ft-stripe: #161b22;
+		--ft-hover: #1a2029;
+		--ft-border: #3d444d;
+		--ft-accent: #60a5fa;
+	}
+}
+
+/*
+ * Width break-out, shared with tab groups (SheetTableTabs.astro). Post bodies usually sit in a narrow
+ * text column; "wide" and "full" let the box grow past it. The box is centered on that column with
+ * equal negative margins, never shrinks below it (the max(100%, …)), and stops 1rem short of each
+ * screen edge. `100%` resolves against the column in both `width` and `margin-inline`, which is what
+ * keeps the two in agreement.
+ */
+.emdash-sheet-width--wide,
+.emdash-sheet-width--full {
+	/* --ft-viewport is set by fitBreakouts(): 100vw counts the scrollbar, the real visible width doesn't. */
+	--ft-width: max(100%, min(var(--ft-max-width, 1200px), var(--ft-viewport, 100vw) - 2rem));
+	box-sizing: border-box;
+	width: var(--ft-width);
+	max-width: none;
+	margin-inline: calc((100% - var(--ft-width)) / 2);
+	/* Set by fitBreakouts() when an off-center column (a sidebar layout) would push the box off screen. */
+	translate: var(--ft-shift, 0px) 0;
+	/* Above neighbouring content it may now overlap, such as a sidebar. */
+	position: relative;
+	z-index: 1;
+}
+
+.emdash-sheet-width--full {
+	--ft-max-width: var(--ft-viewport, 100vw);
+}
+
+/* Inside a tab group, the group decides the width; each table just fills its panel. */
+.emdash-sheet-tabs .emdash-sheet-table {
+	width: auto;
+	margin-inline: 0;
+}
+
+.emdash-sheet-table__title {
+	font-size: 1.25rem;
+	font-weight: 600;
+	margin: 0 0 0.25rem;
+	color: var(--ft-fg);
+}
+
+.emdash-sheet-table__description {
+	margin: 0 0 0.75rem;
+	color: var(--ft-muted);
+}
+
+/* ---------------------------------------------------------------- toolbar */
+
+.emdash-sheet-table__toolbar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.5rem;
+	margin-bottom: 0.75rem;
+}
+
+.emdash-sheet-table__exports {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.375rem;
+}
+
+.emdash-sheet-table .ft-export {
+	font: inherit;
+	font-size: 0.8125rem;
+	font-weight: 500;
+	line-height: 1.25rem;
+	padding: 0.25rem 0.75rem;
+	border: 1px solid var(--ft-border);
+	border-radius: 0.375rem;
+	background: var(--ft-bg);
+	color: var(--ft-fg);
+	box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+	cursor: pointer;
+	transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.emdash-sheet-table .ft-export:hover:not(:disabled) {
+	background: var(--ft-hover);
+	border-color: color-mix(in srgb, var(--ft-accent) 45%, var(--ft-border));
+}
+
+.emdash-sheet-table .ft-export:disabled {
+	opacity: 0.6;
+	cursor: progress;
+}
+
+.emdash-sheet-table__search {
+	margin-left: auto;
+	font: inherit;
+	font-size: 0.875rem;
+	border: 1px solid var(--ft-border);
+	border-radius: 0.5rem;
+	padding: 0.375rem 0.75rem;
+	background: var(--ft-bg);
+	color: var(--ft-fg);
+	min-width: min(240px, 100%);
+	transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.emdash-sheet-table .ft-export:focus-visible,
+.emdash-sheet-table__search:focus-visible,
+.emdash-sheet-table .ft-page:focus-visible,
+.emdash-sheet-table th[data-sortable]:focus-visible {
+	outline: none;
+	border-color: var(--ft-accent);
+	box-shadow: 0 0 0 3px var(--ft-ring);
+}
+
+/* ------------------------------------------------------------------ table */
+
+.emdash-sheet-table__scroll {
+	overflow-x: auto;
+	border-radius: 0.375rem;
+}
+
+.emdash-sheet-table--scrollable .emdash-sheet-table__scroll {
+	max-height: 28rem;
+	overflow-y: auto;
+}
+
+.ft-freeze-header .emdash-sheet-table__scroll {
+	max-height: var(--ft-table-height, 480px);
+	overflow-y: auto;
+}
+
+.ft-draggable .emdash-sheet-table__scroll {
+	cursor: grab;
+}
+
+.ft-draggable .emdash-sheet-table__scroll.is-dragging {
+	cursor: grabbing;
+	user-select: none;
+}
+
+/* `separate`, not `collapse`: sticky header cells and frozen columns lose their borders when collapsed. */
+.emdash-sheet-table table {
+	width: 100%;
+	border-collapse: separate;
+	border-spacing: 0;
+	background: var(--ft-bg);
+	margin: 0;
+}
+
+.emdash-sheet-table th,
+.emdash-sheet-table td {
+	padding: 0.5rem 0.75rem;
+	text-align: left;
+	vertical-align: top;
+	border: 0 solid var(--ft-border);
+}
+
+.emdash-sheet-table td {
+	background: var(--ft-bg);
+	color: var(--ft-fg);
+}
+
+.emdash-sheet-table th {
+	background: var(--ft-head-bg);
+	color: var(--ft-head-fg);
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+/* Borders: a full grid, lines between rows only, or none. */
+.ft-borders--all th,
+.ft-borders--all td {
+	border-right-width: 1px;
+	border-bottom-width: 1px;
+}
+
+.ft-borders--all tr > :first-child {
+	border-left-width: 1px;
+}
+
+.ft-borders--all thead tr:first-child > th,
+.ft-borders--all table:not(:has(thead th)) tbody tr:first-child > td {
+	border-top-width: 1px;
+}
+
+.ft-borders--horizontal th,
+.ft-borders--horizontal td {
+	border-bottom-width: 1px;
+}
+
+.ft-borders--horizontal tbody tr:last-child > td {
+	border-bottom-width: 0;
+}
+
+/* Rounded corners on the grid's outer cells. */
+.ft-borders--all thead tr:first-child > th:first-child { border-top-left-radius: 0.375rem; }
+.ft-borders--all thead tr:first-child > th:last-child { border-top-right-radius: 0.375rem; }
+
+.ft-borders--horizontal thead tr:first-child > th:first-child,
+.ft-borders--none thead tr:first-child > th:first-child { border-top-left-radius: 0.375rem; }
+.ft-borders--horizontal thead tr:first-child > th:last-child,
+.ft-borders--none thead tr:first-child > th:last-child { border-top-right-radius: 0.375rem; }
+
+.ft-stripes--rows tbody tr:nth-child(even) > td {
+	background: var(--ft-stripe);
+}
+
+.ft-stripes--columns tbody td:nth-child(even) {
+	background: var(--ft-stripe);
+}
+
+.emdash-sheet-table tbody tr > td {
+	transition: background-color 0.1s ease;
+}
+
+.emdash-sheet-table tbody tr:hover > td {
+	background: var(--ft-hover);
+}
+
+.ft-upper th {
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	font-size: 0.75rem;
+}
+
+.emdash-sheet-table a {
+	color: var(--ft-accent);
+	text-underline-offset: 2px;
+}
+
+.emdash-sheet-table th[data-sortable="true"] {
+	cursor: pointer;
+	user-select: none;
+	transition: color 0.15s ease;
+}
+
+.emdash-sheet-table th[data-sortable="true"]:hover {
+	color: color-mix(in srgb, var(--ft-head-fg) 70%, var(--ft-accent));
+}
+
+.emdash-sheet-table th[data-sortable="true"]::after {
+	content: "\21C5";
+	opacity: 0.4;
+	margin-inline-start: 0.35em;
+	font-size: 0.8em;
+}
+
+.emdash-sheet-table th[data-sort="asc"]::after {
+	content: "\2191";
+	opacity: 1;
+}
+
+.emdash-sheet-table th[data-sort="desc"]::after {
+	content: "\2193";
+	opacity: 1;
+}
+
+.emdash-sheet-table img {
+	max-width: 6rem;
+	max-height: 6rem;
+	display: block;
+}
+
+.emdash-sheet-table .ft-empty td {
+	text-align: center;
+	color: var(--ft-muted);
+	padding: 1.5rem;
+}
+
+/* Sticky header. Above frozen body cells, below the frozen header corner. */
+.ft-freeze-header thead th {
+	position: sticky;
+	top: 0;
+	z-index: 2;
+}
+
+/* Frozen columns. Offsets are set by positionFrozenColumns() in render.ts. */
+.ft-has-frozen .ft-fl,
+.ft-has-frozen .ft-fr {
+	position: sticky;
+	z-index: 1;
+}
+
+.ft-has-frozen th.ft-fl,
+.ft-has-frozen th.ft-fr {
+	z-index: 3;
+}
+
+.ft-has-frozen .ft-fl-edge {
+	box-shadow: 6px 0 6px -6px rgb(0 0 0 / 0.25);
+}
+
+.ft-has-frozen .ft-fr-edge {
+	box-shadow: -6px 0 6px -6px rgb(0 0 0 / 0.25);
+}
+
+/* Columns hidden per screen size. Same 640px breakpoint as the collapsible layout. */
+@media (min-width: 641px) {
+	.emdash-sheet-table .ft-hd {
+		display: none !important;
+	}
+}
+
+@media (max-width: 640px) {
+	.emdash-sheet-table .ft-hm {
+		display: none !important;
+	}
+}
+
+/* ------------------------------------------------------------- pagination */
+
+.emdash-sheet-table__pagination {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	flex-wrap: wrap;
+	gap: 0.5rem 1rem;
+	margin-top: 0.75rem;
+	font-size: 0.85rem;
+	color: var(--ft-muted);
+}
+
+.ft-pg-pos--right .emdash-sheet-table__pages {
+	margin-left: auto;
+}
+
+.ft-pg-pos--center .emdash-sheet-table__pagination {
+	flex-direction: column;
+	justify-content: center;
+}
+
+.emdash-sheet-table__pages {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 0.25rem;
+}
+
+.emdash-sheet-table .ft-page {
+	font: inherit;
+	font-size: 0.8125rem;
+	font-weight: 500;
+	min-width: 2rem;
+	height: 2rem;
+	padding: 0 0.6rem;
+	border: 1px solid var(--ft-border);
+	border-radius: 0.375rem;
+	background: var(--ft-bg);
+	color: var(--ft-fg);
+	cursor: pointer;
+	transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.emdash-sheet-table .ft-page:hover:not(:disabled):not(.is-active) {
+	background: var(--ft-hover);
+}
+
+.emdash-sheet-table .ft-page:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+
+.emdash-sheet-table .ft-page.is-active {
+	background: var(--ft-page-active);
+	border-color: var(--ft-page-active);
+	color: #fff;
+}
+
+.ft-page-gap {
+	padding: 0 0.25rem;
+}
+
+.ft-page-label {
+	padding: 0 0.5rem;
+}
+
+/* Modern: soft pills. */
+.ft-pg--modern .ft-page {
+	border-color: transparent;
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--ft-fg) 6%, var(--ft-bg));
+}
+
+.ft-pg--modern .ft-page.is-active {
+	box-shadow: 0 4px 10px -2px color-mix(in srgb, var(--ft-page-active) 45%, transparent);
+}
+
+/* Minimal: bare numbers, the current one underlined. */
+.ft-pg--minimal .ft-page {
+	border-color: transparent;
+	background: transparent;
+	border-radius: 0;
+	border-bottom: 2px solid transparent;
+}
+
+.ft-pg--minimal .ft-page.is-active {
+	background: transparent;
+	color: var(--ft-page-active);
+	border-color: transparent;
+	border-bottom-color: var(--ft-page-active);
+	font-weight: 700;
+}
+
+/* Tailwind: one joined button group with a soft shadow. */
+.ft-pg--tailwind .emdash-sheet-table__pages {
+	gap: 0;
+	border-radius: 0.375rem;
+	box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+}
+
+.ft-pg--tailwind .ft-page,
+.ft-pg--tailwind .ft-page-gap {
+	border-radius: 0;
+	margin-left: -1px;
+	height: 2.25rem;
+	min-width: 2.25rem;
+}
+
+.ft-pg--tailwind .ft-page-gap {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border: 1px solid var(--ft-border);
+	background: var(--ft-bg);
+}
+
+.ft-pg--tailwind .emdash-sheet-table__pages > :first-child {
+	border-radius: 0.375rem 0 0 0.375rem;
+	margin-left: 0;
+}
+
+.ft-pg--tailwind .emdash-sheet-table__pages > :last-child {
+	border-radius: 0 0.375rem 0.375rem 0;
+}
+
+.ft-pg--tailwind .ft-page.is-active {
+	position: relative;
+	z-index: 1;
+}
+
+/* Outlined: accent-colored outlines, filled when current. */
+.ft-pg--outlined .ft-page {
+	border: 1.5px solid color-mix(in srgb, var(--ft-page-active) 55%, var(--ft-border));
+	color: var(--ft-page-active);
+	background: transparent;
+}
+
+.ft-pg--outlined .ft-page:hover:not(:disabled):not(.is-active) {
+	background: color-mix(in srgb, var(--ft-page-active) 10%, transparent);
+}
+
+/* ------------------------------------------------------------- responsive */
+
+.emdash-sheet-table--collapsible table,
+.emdash-sheet-table--collapsible thead,
+.emdash-sheet-table--collapsible tbody,
+.emdash-sheet-table--collapsible tr,
+.emdash-sheet-table--collapsible td {
+	display: block;
+	width: 100%;
+}
+
+@media (min-width: 641px) {
+	.emdash-sheet-table--collapsible table,
+	.emdash-sheet-table--collapsible thead,
+	.emdash-sheet-table--collapsible tbody,
+	.emdash-sheet-table--collapsible tr,
+	.emdash-sheet-table--collapsible td {
+		display: revert;
+		width: revert;
+	}
+}
+
+@media (max-width: 640px) {
+	.emdash-sheet-table--collapsible thead {
+		display: none;
+	}
+	.emdash-sheet-table--collapsible tr {
+		border: 1px solid var(--ft-border);
+		margin-bottom: 0.5rem;
+		border-radius: 0.5rem;
+		overflow: hidden;
+	}
+	.emdash-sheet-table--collapsible td {
+		border-width: 0 0 1px !important;
+		display: flex;
+		justify-content: space-between;
+		gap: 0.75rem;
+		text-align: right;
+	}
+	.emdash-sheet-table--collapsible td::before {
+		content: attr(data-label);
+		font-weight: 600;
+		text-align: left;
+	}
+	.emdash-sheet-table--collapsible td:last-child {
+		border-bottom-width: 0 !important;
+	}
+	/* Stacked cards have nothing to pin. */
+	.emdash-sheet-table--collapsible .ft-fl,
+	.emdash-sheet-table--collapsible .ft-fr {
+		position: static;
+		box-shadow: none;
+	}
+	.emdash-sheet-table__search {
+		margin-left: 0;
+		flex: 1 1 100%;
+	}
+}
+
+/* --------------------------------------------------------------- messages */
+
+.emdash-sheet-table__error {
+	border: 1px solid #f2b8b5;
+	background: #fdecea;
+	color: #7a271a;
+	border-radius: 0.5rem;
+	padding: 0.5rem 0.75rem;
+	margin: 0;
+}
+
+.emdash-sheet-table__notice {
+	border: 1px solid #f2d675;
+	background: #fdf6e3;
+	color: #6b5300;
+	border-radius: 0.5rem;
+	padding: 0.5rem 0.75rem;
+	margin: 0 0 0.75rem;
+	font-size: 0.85rem;
+}
+
+.emdash-sheet-table__loading {
+	margin: 0;
+	color: var(--ft-muted);
+}

@@ -1,6 +1,8 @@
 import { apiFetch, getErrorMessage, parseApiResponse } from "emdash/plugin-utils";
 import * as React from "react";
 
+import { UI_CSS } from "./ui.js";
+
 const ROUTE_BASE = "/_emdash/api/plugins/sheet-table";
 export const inputClass = "w-full rounded-md border px-3 py-2 text-sm bg-background";
 
@@ -77,7 +79,7 @@ export function withPluginStyles<P extends object>(Page: React.ComponentType<P>)
 	function StyledPage(props: P) {
 		return (
 			<div className="sheet-table-admin">
-				<style>{PLUGIN_CSS}</style>
+				<style>{PLUGIN_CSS + UI_CSS}</style>
 				<Page {...props} />
 			</div>
 		);
@@ -144,7 +146,7 @@ export function Checkbox({ label, checked, onChange }: { label: string; checked:
 
 export type TableWidth = "content" | "wide" | "full";
 
-const WIDTH_HELP: Record<TableWidth, string> = {
+export const WIDTH_HELP: Record<TableWidth, string> = {
 	content: "Stays inside the page's text column.",
 	wide: "Grows past the text column, up to the max width, centered on it.",
 	full: "Spans the screen, keeping a small gap at each edge.",

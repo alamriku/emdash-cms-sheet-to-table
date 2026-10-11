@@ -1,8 +1,9 @@
 import type { PluginContext } from "emdash/plugin";
 
 import { getAccessToken } from "./oauth.js";
-import { type PublicSheetTab, csvExportUrl, htmlviewUrl, parseCsv, parseHtmlviewTabs } from "./sheets.js";
-import { fetchSheetValues } from "./sheets-api.js";
+import { type RawSheetFormat, alignFormat, htmlviewSheetUrl, parseHtmlviewFormat } from "./sheet-format.js";
+import { type PublicSheetTab, csvExportUrl, htmlviewUrl, isBlankRow, parseCsv, parseHtmlviewTabs } from "./sheets.js";
+import { fetchSheetFormat, fetchSheetValues } from "./sheets-api.js";
 import type { TableRecord, TableSnapshot } from "./types.js";
 
 export function snapshotKey(tableId: string): string {
@@ -23,6 +24,11 @@ export function sourceKeyFor(table: TableRecord): string {
  */
 export const MAX_TABLE_ROWS = 10_000;
 
+/** Whether the table shows anything that needs the sheet's formatting, not just its values. */
+export function needsFormat(table: TableRecord): boolean {
+	return Boolean(table.importStyles || table.mergeCells);
+}
+
 /**
  * Refreshes a table's cached data from its source (public CSV export or, when
  * connected, the Sheets API) and writes the result to `ctx.kv`. Used by both
@@ -37,7 +43,12 @@ export async function syncTable(
 ): Promise<TableSnapshot> {
 	if (!options.force) {
 		const existing = await ctx.kv.get<TableSnapshot>(snapshotKey(tableId));
-		if (existing && existing.sourceKey === sourceKeyFor(table) && !isStale(existing, table.cacheDurationDays)) {
+		if (
+			existing &&
+			existing.sourceKey === sourceKeyFor(table) &&
+			!isStale(existing, table.cacheDurationDays) &&
+			(!needsFormat(table) || existing.format || existing.formatError)
+		) {
 			return existing;
 		}
 	}
@@ -48,19 +59,35 @@ export async function syncTable(
 
 	let snapshot: TableSnapshot;
 	try {
-		const allRows =
+		const sheetRows =
 			table.source === "oauth" ? await fetchViaOAuth(ctx, table) : await fetchViaPublicCsv(ctx, table);
 
-		const headers = table.hasHeaderRow ? (allRows[0] ?? []) : [];
-		const allDataRows = table.hasHeaderRow ? allRows.slice(1) : allRows;
+		// Blank rows are skipped, but each kept row remembers its sheet row so formatting lines up.
+		const kept: number[] = [];
+		sheetRows.forEach((row, index) => {
+			if (!isBlankRow(row)) kept.push(index);
+		});
+		const headerRow = table.hasHeaderRow ? (kept[0] ?? null) : null;
+		const dataRowIndexes = (table.hasHeaderRow ? kept.slice(1) : kept).slice(0, MAX_TABLE_ROWS);
+		const totalRowCount = table.hasHeaderRow ? Math.max(0, kept.length - 1) : kept.length;
 
 		snapshot = {
-			headers,
-			rows: allDataRows.slice(0, MAX_TABLE_ROWS),
-			totalRowCount: allDataRows.length,
+			headers: headerRow !== null ? (sheetRows[headerRow] ?? []) : [],
+			rows: dataRowIndexes.map((index) => sheetRows[index] ?? []),
+			totalRowCount,
 			syncedAt: new Date().toISOString(),
 			sourceKey: sourceKeyFor(table),
 		};
+
+		if (needsFormat(table)) {
+			try {
+				const raw = table.source === "oauth" ? await fetchFormatViaOAuth(ctx, table) : await fetchFormatViaHtmlview(ctx, table);
+				snapshot.format = alignFormat(raw, headerRow, dataRowIndexes);
+			} catch (error) {
+				// The values are fine; show them without formatting rather than failing the whole sync.
+				snapshot.formatError = error instanceof Error ? error.message : "Could not read the sheet's formatting";
+			}
+		}
 	} catch (error) {
 		const message = error instanceof Error ? error.message : "Sync failed";
 		const cached = await ctx.kv.get<TableSnapshot>(snapshotKey(tableId));
@@ -73,6 +100,7 @@ export async function syncTable(
 			rows: previous?.rows ?? [],
 			totalRowCount: previous?.totalRowCount ?? previous?.rows.length ?? 0,
 			syncedAt: previous?.syncedAt ?? new Date().toISOString(),
+			format: previous?.format,
 			error: message,
 		};
 	}
@@ -99,7 +127,7 @@ async function fetchViaPublicCsv(ctx: PluginContext, table: TableRecord): Promis
 			throw new Error(`Google Sheets returned ${response.status}. Try "Sync now" again in a moment.`);
 		}
 		const text = await response.text();
-		return parseCsv(text);
+		return parseCsv(text, { keepEmptyRows: true });
 	} finally {
 		clearTimeout(timer);
 	}
@@ -143,6 +171,25 @@ async function fetchViaOAuth(ctx: PluginContext, table: TableRecord): Promise<st
 		throw new Error("This table has no sheet tab selected.");
 	}
 	return fetchSheetValues(ctx, accessToken, table.sheetId, table.sheetTitle);
+}
+
+async function fetchFormatViaHtmlview(ctx: PluginContext, table: TableRecord): Promise<RawSheetFormat> {
+	if (!ctx.http) throw new Error("Network capability not granted");
+	const controller = new AbortController();
+	const timer = setTimeout(() => controller.abort(), Math.max(1, table.responseTimeoutSeconds) * 1000);
+	try {
+		const response = await ctx.http.fetch(htmlviewSheetUrl(table.sheetId, table.gid), { signal: controller.signal });
+		if (!response.ok) throw new Error(`Google Sheets returned ${response.status} while reading cell styles`);
+		return parseHtmlviewFormat(await response.text());
+	} finally {
+		clearTimeout(timer);
+	}
+}
+
+async function fetchFormatViaOAuth(ctx: PluginContext, table: TableRecord): Promise<RawSheetFormat> {
+	const accessToken = await getAccessToken(ctx);
+	if (!accessToken) throw new Error("Google account is not connected.");
+	return fetchSheetFormat(ctx, accessToken, table.sheetId, table.sheetTitle);
 }
 
 function isStale(snapshot: TableSnapshot, cacheDurationDays: number): boolean {

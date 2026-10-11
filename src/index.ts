@@ -13,18 +13,32 @@ import {
 	getAccessToken,
 	getClientConfig,
 } from "./lib/oauth.js";
+import { toRenderPayload, withTableDefaults } from "./lib/payload.js";
 import { parseSheetUrl } from "./lib/sheets.js";
 import { listSheetTabs, listSpreadsheets } from "./lib/sheets-api.js";
-import { fetchPublicSheetTabs, snapshotKey, syncTable } from "./lib/sync.js";
+import { fetchPublicSheetTabs, needsFormat, snapshotKey, syncTable } from "./lib/sync.js";
+import {
+	BUILTIN_THEMES,
+	CUSTOM_THEME_PREFIX,
+	type CustomThemeRecord,
+	THEME_COLOR_KEYS,
+	type ThemeDefinition,
+	cleanColors,
+	isHexColor,
+} from "./lib/themes.js";
 import {
 	DEFAULT_MAX_WIDTH,
 	DEFAULT_TABLE,
+	EXPORT_FORMATS,
+	PAGINATION_STYLES,
 	type TabGroupRecord,
 	type TabGroupRenderPayload,
 	type TableRecord,
 	type TableRenderMeta,
 	type TableRenderPayload,
 	type TableSnapshot,
+	type ExportFormat,
+	type PaginationStyle,
 } from "./lib/types.js";
 
 import { version } from "../package.json";
@@ -65,12 +79,23 @@ const widthFields = {
 	maxWidth: z.number().int().min(480).max(3840).default(DEFAULT_MAX_WIDTH),
 };
 
+const themeIdSchema = z
+	.string()
+	.min(1)
+	.max(120)
+	.refine((id) => id.startsWith(CUSTOM_THEME_PREFIX) || BUILTIN_THEMES.some((theme) => theme.id === id), "Unknown theme");
+
+const columnList = z.array(z.number().int().min(0).max(5000)).max(5000);
+
 const commonTableFields = {
 	name: z.string().min(1).max(200),
 	hasHeaderRow: z.boolean(),
 	showTitle: z.boolean(),
 	description: z.string().max(2000),
-	theme: z.enum(["simple", "simple-dark", "auto"]),
+	theme: themeIdSchema,
+	// Everything from here on was added after 0.2; the defaults keep older admin builds valid.
+	themeColors: z.record(z.string()).default({}).transform((colors) => cleanColors(colors)),
+	importStyles: z.boolean().default(false),
 	responsiveStyle: z.enum(["default", "collapsible", "scrollable"]),
 	...widthFields,
 	rowsPerPage: z.number().int().min(1).max(500),
@@ -84,6 +109,32 @@ const commonTableFields = {
 	imagesAsImages: z.boolean(),
 	cacheDurationDays: z.number().min(0).max(365),
 	responseTimeoutSeconds: z.number().min(1).max(120),
+	exportButtons: z
+		.array(z.enum(EXPORT_FORMATS as [ExportFormat, ...ExportFormat[]]))
+		.max(EXPORT_FORMATS.length)
+		.default([])
+		.transform((formats) => EXPORT_FORMATS.filter((format) => formats.includes(format))),
+	paginationStyle: z.enum(PAGINATION_STYLES as [PaginationStyle, ...PaginationStyle[]]).default("default"),
+	paginationPosition: z.enum(["center", "right"]).default("right"),
+	paginationColor: z
+		.string()
+		.refine((color) => color === "" || isHexColor(color), "Use a hex color like #4f46e5")
+		.default(""),
+	freezeHeader: z.boolean().default(false),
+	tableHeight: z.number().int().min(150).max(3000).default(DEFAULT_TABLE.tableHeight),
+	horizontalDrag: z.boolean().default(false),
+	freezeColumnsLeft: z.number().int().min(0).max(10).default(0),
+	freezeColumnsRight: z.number().int().min(0).max(10).default(0),
+	hiddenColumnsDesktop: columnList.default([]),
+	hiddenColumnsMobile: columnList.default([]),
+	hiddenRows: z.array(z.number().int().min(0).max(100_000)).max(20_000).default([]),
+	hiddenCells: z
+		.array(z.string().regex(/^\d{1,6}:\d{1,4}$/))
+		.max(20_000)
+		.default([]),
+	defaultSortColumn: z.number().int().min(-1).max(5000).default(-1),
+	defaultSortDirection: z.enum(["asc", "desc"]).default("asc"),
+	customCss: z.string().max(20_000).default(""),
 };
 
 const createInputSchema = z.discriminatedUnion("source", [
@@ -111,6 +162,21 @@ const updateInputSchema = z
 	});
 
 const idInputSchema = z.object({ id: z.string().min(1) });
+
+const hexColor = z.string().refine(isHexColor, "Use a hex color like #4f46e5");
+const themeFields = {
+	name: z.string().trim().min(1).max(100),
+	colors: z.object(
+		Object.fromEntries(THEME_COLOR_KEYS.map((key) => [key, hexColor])) as Record<(typeof THEME_COLOR_KEYS)[number], typeof hexColor>,
+	),
+	options: z.object({
+		borders: z.enum(["all", "horizontal", "none"]),
+		stripes: z.enum(["none", "rows", "columns"]),
+		uppercaseHeader: z.boolean(),
+	}),
+};
+const themeCreateSchema = z.object(themeFields);
+const themeUpdateSchema = z.object({ id: z.string().min(1), ...themeFields });
 
 const tabGroupFields = {
 	name: z.string().trim().min(1).max(200),
@@ -152,6 +218,9 @@ export function createPlugin(_options: SheetTablePluginOptions = {}): ResolvedPl
 			tabGroups: {
 				indexes: ["createdAt"],
 			},
+			themes: {
+				indexes: ["createdAt"],
+			},
 		},
 
 		admin: {
@@ -185,11 +254,7 @@ export function createPlugin(_options: SheetTablePluginOptions = {}): ResolvedPl
 				defaultTheme: {
 					type: "select",
 					label: "Default theme",
-					options: [
-						{ value: "auto", label: "Auto (match visitor's light/dark preference)" },
-						{ value: "simple", label: "Simple (light)" },
-						{ value: "simple-dark", label: "Simple (dark)" },
-					],
+					options: BUILTIN_THEMES.map((theme) => ({ value: theme.id, label: theme.label })),
 					default: DEFAULT_TABLE.theme,
 				},
 				googleClientId: {
@@ -273,6 +338,7 @@ export function createPlugin(_options: SheetTablePluginOptions = {}): ResolvedPl
 				if (event.deleteData) {
 					await deleteAllTables(ctx);
 					await deleteAllTabGroups(ctx);
+					await deleteAllThemes(ctx);
 					await disconnectGoogle(ctx);
 				}
 			},
@@ -342,7 +408,7 @@ export function createPlugin(_options: SheetTablePluginOptions = {}): ResolvedPl
 					if (!table) return { ok: false, error: "NOT_FOUND" };
 
 					const snapshot = await ctx.kv.get<TableSnapshot>(snapshotKey(parsed.data.id));
-					return { ok: true, id: parsed.data.id, table, snapshot: snapshot ?? null };
+					return { ok: true, id: parsed.data.id, table: withTableDefaults(table), snapshot: snapshot ?? null };
 				},
 			},
 
@@ -351,7 +417,7 @@ export function createPlugin(_options: SheetTablePluginOptions = {}): ResolvedPl
 				handler: async (ctx) => {
 					const parsed = createInputSchema.safeParse(ctx.input);
 					if (!parsed.success) {
-						return { ok: false, error: "VALIDATION_ERROR", issues: parsed.error.issues };
+						return { ok: false, error: "VALIDATION_ERROR", message: firstIssue(parsed.error), issues: parsed.error.issues };
 					}
 					if ((await ctx.storage.tables.count()) >= FREE_TABLE_LIMIT) {
 						return { ok: false, error: "TABLE_LIMIT_REACHED", message: TABLE_LIMIT_MESSAGE };
@@ -386,34 +452,18 @@ export function createPlugin(_options: SheetTablePluginOptions = {}): ResolvedPl
 
 					const now = new Date().toISOString();
 					const id = `table_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-					const table: TableRecord = {
-						name: input.name,
-						source: input.source,
+					const { source, ...fields } = input;
+					const table = {
+						...DEFAULT_TABLE,
+						...fields,
+						source,
 						sheetUrl,
 						sheetId,
 						gid,
 						sheetTitle,
-						hasHeaderRow: input.hasHeaderRow,
-						showTitle: input.showTitle,
-						description: input.description,
-						theme: input.theme,
-						responsiveStyle: input.responsiveStyle,
-						tableWidth: input.tableWidth,
-						maxWidth: input.maxWidth,
-						rowsPerPage: input.rowsPerPage,
-						showInfoBlock: input.showInfoBlock,
-						allowSorting: input.allowSorting,
-						showSearch: input.showSearch,
-						asyncLoading: input.asyncLoading,
-						mergeCells: input.mergeCells,
-						linksAsLinks: input.linksAsLinks,
-						linksOpenInNewTab: input.linksOpenInNewTab,
-						imagesAsImages: input.imagesAsImages,
-						cacheDurationDays: input.cacheDurationDays,
-						responseTimeoutSeconds: input.responseTimeoutSeconds,
 						createdAt: now,
 						updatedAt: now,
-					};
+					} as TableRecord;
 
 					await ctx.storage.tables.put(id, table);
 					const snapshot = await syncTable(ctx, id, table, { force: true });
@@ -427,12 +477,13 @@ export function createPlugin(_options: SheetTablePluginOptions = {}): ResolvedPl
 				handler: async (ctx) => {
 					const parsed = updateInputSchema.safeParse(ctx.input);
 					if (!parsed.success) {
-						return { ok: false, error: "VALIDATION_ERROR", issues: parsed.error.issues };
+						return { ok: false, error: "VALIDATION_ERROR", message: firstIssue(parsed.error), issues: parsed.error.issues };
 					}
 					const { id, ...changes } = parsed.data;
 
-					const existing = (await ctx.storage.tables.get(id)) as TableRecord | null;
-					if (!existing) return { ok: false, error: "NOT_FOUND" };
+					const stored = (await ctx.storage.tables.get(id)) as TableRecord | null;
+					if (!stored) return { ok: false, error: "NOT_FOUND" };
+					const existing = withTableDefaults(stored) as TableRecord;
 
 					let sheetId = existing.sheetId;
 					let gid = existing.gid;
@@ -467,7 +518,11 @@ export function createPlugin(_options: SheetTablePluginOptions = {}): ResolvedPl
 						sourceChanged = true;
 					}
 
-					const updated: TableRecord = {
+					if (changes.hasHeaderRow !== undefined && changes.hasHeaderRow !== existing.hasHeaderRow) {
+						sourceChanged = true;
+					}
+
+					const updated = {
 						...existing,
 						...changes,
 						source: effectiveSource,
@@ -476,12 +531,15 @@ export function createPlugin(_options: SheetTablePluginOptions = {}): ResolvedPl
 						sheetTitle,
 						sheetUrl,
 						updatedAt: new Date().toISOString(),
-					};
+					} as TableRecord;
 
 					await ctx.storage.tables.put(id, updated);
-					const snapshot = sourceChanged
-						? await syncTable(ctx, id, updated, { force: true })
-						: await ctx.kv.get<TableSnapshot>(snapshotKey(id));
+					let snapshot = await ctx.kv.get<TableSnapshot>(snapshotKey(id));
+					// Turning on styles or merged cells needs the sheet's formatting, which a values-only sync didn't read.
+					const missingFormat = needsFormat(updated) && !snapshot?.format && !snapshot?.formatError;
+					if (sourceChanged || missingFormat) {
+						snapshot = await syncTable(ctx, id, updated, { force: true });
+					}
 
 					return { ok: true, id, table: updated, snapshot: snapshot ?? null };
 				},
@@ -553,31 +611,53 @@ export function createPlugin(_options: SheetTablePluginOptions = {}): ResolvedPl
 						return { id: parsed.data.id, asyncLoading: table.asyncLoading };
 					}
 
-					const snapshot = await syncTable(ctx, parsed.data.id, table, { force: false });
+					const snapshot = await syncTable(ctx, parsed.data.id, withTableDefaults(table) as TableRecord, { force: false });
+					return toRenderPayload(parsed.data.id, table, snapshot, await loadCustomTheme(ctx, table.theme));
+				},
+			},
 
-					return {
-						id: parsed.data.id,
-						name: table.name,
-						showTitle: table.showTitle,
-						description: table.description,
-						theme: table.theme,
-						responsiveStyle: table.responsiveStyle,
-						tableWidth: table.tableWidth ?? "content",
-						maxWidth: table.maxWidth ?? DEFAULT_MAX_WIDTH,
-						rowsPerPage: table.rowsPerPage,
-						showInfoBlock: table.showInfoBlock,
-						allowSorting: table.allowSorting,
-						showSearch: table.showSearch,
-						asyncLoading: table.asyncLoading,
-						linksAsLinks: table.linksAsLinks,
-						linksOpenInNewTab: table.linksOpenInNewTab,
-						imagesAsImages: table.imagesAsImages,
-						headers: snapshot.headers,
-						rows: snapshot.rows,
-						totalRowCount: snapshot.totalRowCount,
-						syncedAt: snapshot.syncedAt,
-						error: snapshot.error,
-					};
+			"themes/list": {
+				handler: async (ctx) => {
+					const result = await ctx.storage.themes.query({ orderBy: { createdAt: "asc" }, limit: 100 });
+					return { items: result.items.map(({ id, data }) => ({ id, ...(data as CustomThemeRecord) })) };
+				},
+			},
+
+			"themes/create": {
+				methods: ["POST"],
+				handler: async (ctx) => {
+					const parsed = themeCreateSchema.safeParse(ctx.input);
+					if (!parsed.success) return { ok: false, error: "VALIDATION_ERROR", message: firstIssue(parsed.error) };
+					const now = new Date().toISOString();
+					const id = `theme_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+					const theme: CustomThemeRecord = { ...parsed.data, createdAt: now, updatedAt: now };
+					await ctx.storage.themes.put(id, theme);
+					return { ok: true, id, theme };
+				},
+			},
+
+			"themes/update": {
+				methods: ["POST"],
+				handler: async (ctx) => {
+					const parsed = themeUpdateSchema.safeParse(ctx.input);
+					if (!parsed.success) return { ok: false, error: "VALIDATION_ERROR", message: firstIssue(parsed.error) };
+					const { id, ...changes } = parsed.data;
+					const existing = (await ctx.storage.themes.get(id)) as CustomThemeRecord | null;
+					if (!existing) return { ok: false, error: "NOT_FOUND" };
+					const theme: CustomThemeRecord = { ...existing, ...changes, updatedAt: new Date().toISOString() };
+					await ctx.storage.themes.put(id, theme);
+					return { ok: true, id, theme };
+				},
+			},
+
+			// Tables that used a deleted theme fall back to "Auto" (see resolveTheme).
+			"themes/delete": {
+				methods: ["POST"],
+				handler: async (ctx) => {
+					const parsed = idInputSchema.safeParse(ctx.input);
+					if (!parsed.success) return { ok: false, error: "INVALID_ID" };
+					await ctx.storage.themes.delete(parsed.data.id);
+					return { ok: true };
 				},
 			},
 
@@ -850,6 +930,14 @@ export function createPlugin(_options: SheetTablePluginOptions = {}): ResolvedPl
 	});
 }
 
+/** The custom theme a table uses, keyed by its id, for resolveTheme(). Empty for built-in themes. */
+async function loadCustomTheme(ctx: PluginContext, themeId: string): Promise<Record<string, ThemeDefinition>> {
+	if (!themeId.startsWith(CUSTOM_THEME_PREFIX)) return {};
+	const id = themeId.slice(CUSTOM_THEME_PREFIX.length);
+	const theme = (await ctx.storage.themes.get(id)) as CustomThemeRecord | null;
+	return theme ? { [id]: theme } : {};
+}
+
 /** A readable one-line version of the first validation problem, for showing in the admin form. */
 function firstIssue(error: z.ZodError): string {
 	const issue = error.issues[0];
@@ -877,6 +965,16 @@ async function deleteAllTabGroups(ctx: PluginContext): Promise<void> {
 		const page = await ctx.storage.tabGroups.query({ limit: 100, cursor });
 		if (page.items.length === 0) break;
 		await ctx.storage.tabGroups.deleteMany(page.items.map((item) => item.id));
+		cursor = page.cursor;
+	} while (cursor);
+}
+
+async function deleteAllThemes(ctx: PluginContext): Promise<void> {
+	let cursor: string | undefined;
+	do {
+		const page = await ctx.storage.themes.query({ limit: 100, cursor });
+		if (page.items.length === 0) break;
+		await ctx.storage.themes.deleteMany(page.items.map((item) => item.id));
 		cursor = page.cursor;
 	} while (cursor);
 }

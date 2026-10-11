@@ -1,5 +1,7 @@
 import type { PluginContext } from "emdash/plugin";
 
+import { type ApiGridData, type RawSheetFormat, parseApiGridFormat } from "./sheet-format.js";
+
 const DRIVE_FILES_URL = "https://www.googleapis.com/drive/v3/files";
 const SHEETS_API_BASE = "https://sheets.googleapis.com/v4/spreadsheets";
 
@@ -83,4 +85,25 @@ export async function fetchSheetValues(
 		while (cells.length < width) cells.push("");
 		return cells;
 	});
+}
+
+/** Cell formatting and merges of one tab, read through the Sheets API's grid data. */
+export async function fetchSheetFormat(
+	ctx: PluginContext,
+	accessToken: string,
+	spreadsheetId: string,
+	sheetTitle: string,
+): Promise<RawSheetFormat> {
+	const encodedId = encodeURIComponent(spreadsheetId);
+	const params = new URLSearchParams({
+		ranges: sheetTitle,
+		includeGridData: "true",
+		fields:
+			"sheets(merges,data(startRow,startColumn,rowData(values(effectiveFormat(backgroundColor,horizontalAlignment,textFormat)))))",
+	});
+	const response = await authedFetch(ctx, accessToken, `${SHEETS_API_BASE}/${encodedId}?${params.toString()}`);
+	if (!response.ok) {
+		throw new Error(`Google Sheets returned ${response.status} while reading cell styles`);
+	}
+	return parseApiGridFormat((await response.json()) as ApiGridData);
 }
