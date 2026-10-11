@@ -1,5 +1,10 @@
 # Sheet Table: Google Sheets to Table Plugin for EmDash CMS
 
+[![npm version](https://img.shields.io/npm/v/emdash-plugin-sheet-table)](https://www.npmjs.com/package/emdash-plugin-sheet-table)
+[![npm downloads](https://img.shields.io/npm/dm/emdash-plugin-sheet-table)](https://www.npmjs.com/package/emdash-plugin-sheet-table)
+[![license: MIT](https://img.shields.io/npm/l/emdash-plugin-sheet-table)](LICENSE)
+[![GitHub stars](https://img.shields.io/github/stars/alamriku/emdash-cms-sheet-to-table?style=flat)](https://github.com/alamriku/emdash-cms-sheet-to-table)
+
 **Turn any Google Sheet into a live, searchable, sortable table on your EmDash site.** Edit the
 sheet, and your site's table follows. No copy-pasting data, no HTML tables to maintain.
 
@@ -38,6 +43,18 @@ source of truth that anyone on your team can edit, right from the spreadsheet th
 - **Staff, member, or resource directories** your visitors can search
 - **Results, rankings, and leaderboards** kept current from a shared sheet
 - **Inventory and availability lists** managed by non-technical teammates
+
+## How is this different from embedding a Google Sheet?
+
+| Way to show a sheet | Stays in sync | Matches your site | Search, sort, export | Part of your page (SEO) |
+| --- | --- | --- | --- | --- |
+| Google's "Publish to web" embed (iframe) | Yes | No, Google's look | No | No, it's an iframe |
+| Copy the data into an HTML table | No, goes stale | Yes | No | Yes |
+| Import a CSV into a collection | No, one-time copy | Yes | No | Yes |
+| **Sheet Table** | **Yes, auto-sync** | **Yes, themes + custom CSS** | **Yes** | **Yes, server-rendered** |
+
+Sheet Table reads the sheet on the server and caches it, so visitors never wait on Google and the
+sheet itself never has to be published to the web.
 
 ## Free features
 

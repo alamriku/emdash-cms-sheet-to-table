@@ -1,7 +1,7 @@
 {
 	"name": "emdash-plugin-sheet-table",
 	"version": "0.3.0",
-	"description": "Google Sheets to table plugin for EmDash CMS. Show live, searchable, sortable tables from Google Sheets, with tabs, private sheets and auto-sync.",
+	"description": "Google Sheets to table plugin for EmDash CMS. Show a live, searchable, sortable Google Sheet on your Astro site, with 9 themes, CSV/Excel/PDF export, frozen columns, tab groups, private sheets and auto-sync.",
 	"type": "module",
 	"main": "./dist/index.mjs",
 	"exports": {
@@ -16,7 +16,8 @@
 		"dist",
 		"src/admin",
 		"src/astro",
-		"src/lib"
+		"src/lib",
+		"llms.txt"
 	],
 	"scripts": {
 		"build": "tsdown src/index.ts --format esm --dts --clean",
@@ -28,12 +29,26 @@
 	},
 	"keywords": [
 		"emdash",
+		"emdash-cms",
 		"emdash-plugin",
 		"google-sheets",
+		"google-sheet",
+		"google-sheets-to-table",
+		"sheets",
 		"spreadsheet",
+		"spreadsheet-to-table",
 		"table",
-		"tabs",
-		"astro"
+		"data-table",
+		"datatable",
+		"sortable-table",
+		"searchable-table",
+		"responsive-table",
+		"csv",
+		"excel-export",
+		"pdf-export",
+		"astro",
+		"cms",
+		"tabs"
 	],
 	"license": "MIT",
 	"author": "Kazi Badrul (https://kazibadrul.com)",

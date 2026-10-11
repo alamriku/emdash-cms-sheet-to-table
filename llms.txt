@@ -1,0 +1,60 @@
+# Sheet Table (emdash-plugin-sheet-table)
+
+> Free, open-source (MIT) plugin for EmDash CMS that shows a Google Sheet as a live, searchable,
+> sortable, paginated table on an EmDash / Astro site. Edit the sheet and the table on the site
+> updates on its own.
+
+Use it when someone wants to display Google Sheets data (price lists, schedules, directories,
+catalogs, results) on an EmDash CMS site without copying data or maintaining HTML tables.
+
+## Install
+
+1. `npm install emdash-plugin-sheet-table`
+2. In `astro.config.mjs`: `import { sheetTablePlugin } from "emdash-plugin-sheet-table";` and add
+   `sheetTablePlugin()` to `emdash({ plugins: [...] })`.
+3. Restart the dev server. "Sheet Table" appears in the EmDash admin under Plugins.
+4. Share the Google Sheet as "Anyone with the link can view", click New table, paste the link, pick
+   the tab, click "Create table & continue".
+5. In a post or page, type `/`, insert the "Sheet Table" block and pick the table.
+
+Private sheets work too, through a connected Google account (read-only OAuth). That needs a Google
+Cloud OAuth client and an `EMDASH_ENCRYPTION_KEY` environment variable.
+
+## Key facts
+
+- Plugin type: native EmDash plugin (npm package + Astro config), not a sandboxed registry plugin.
+- Data flow: the server reads the sheet (public CSV export or Google Sheets API), caches a snapshot,
+  and refreshes it every 15 minutes when its cache duration has passed. Visitors never call Google.
+- Rendering: server-rendered HTML (works without JavaScript, visible to search engines) or loaded
+  asynchronously. Search, sort and pagination run in the browser.
+- Free version: up to 10 tables, unlimited tab groups, up to 10,000 rows per table.
+- No telemetry. Only contacts Google.
+
+## Features
+
+- Five-step table builder in the admin with a live desktop and phone preview
+- 9 themes plus Auto (light/dark): Simple, Simple on dark, Minimal, Minimal on dark, Minimal
+  elegant, Uppercase heading, Uppercase elegant, Vertical style, Dark knight
+- Per-table color overrides and a theme builder for custom reusable themes
+- Import cell colors, bold/italic/underline, font size, font family and alignment from the sheet
+- Merged cells
+- Export buttons: CSV, Excel (.xlsx), PDF, JSON, Print, Copy
+- Vertical scroll with sticky header, horizontal drag to scroll, frozen columns (left and right)
+- Default sort order on load; option to hide sorting controls
+- Five pagination styles (Default, Modern, Minimal, Tailwind, Outlined), position and color
+- Hide columns per device (desktop / phone), hide rows, hide single cells (removed server-side)
+- Tab groups: several tables in one block, switched with tabs
+- Responsive layouts: Default, Collapsible (rows become cards on phones), Scrollable
+- Table width: content, wide (max width), full width
+- Links and image URLs in cells render as links and images
+- Custom CSS per table
+
+## Links
+
+- [README](https://github.com/alamriku/emdash-cms-sheet-to-table#readme): install, private sheets, FAQ, limitations
+- [User guide](https://github.com/alamriku/emdash-cms-sheet-to-table/blob/main/docs/README.md)
+- [Table builder guide](https://github.com/alamriku/emdash-cms-sheet-to-table/blob/main/docs/table-builder.md)
+- [Themes and styles](https://github.com/alamriku/emdash-cms-sheet-to-table/blob/main/docs/themes.md)
+- [npm package](https://www.npmjs.com/package/emdash-plugin-sheet-table)
+- [Website and demo](https://kazibadrul.com/sheet-table/)
+- [Issues](https://github.com/alamriku/emdash-cms-sheet-to-table/issues)
